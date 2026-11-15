@@ -4,7 +4,8 @@ All endpoints use same-origin `/api/...` and JSON. Mutating endpoints other than
 
 | Method | Endpoint | Role | Input / purpose |
 |---|---|---|---|
-| GET | `/api/health` | Public | Verify database initialization/connectivity |
+| GET | `/api/health` | Public | Liveness check, independent of database
+| GET | `/api/ready` | Public | Neon connectivity and schema initialization/readiness |
 | POST | `/api/auth/register` | Public | `{name,email,password}`; always student |
 | POST | `/api/auth/login` | Public | `{email,password}`; email lockout after repeated failures |
 | POST | `/api/auth/logout` | Any | Revoke session |

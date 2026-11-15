@@ -198,6 +198,38 @@ test('Neon end-to-end student/staff workflow, permissions and occupancy',
       },b)).status,200);
       assert.equal((await call('/api/auth/logout','POST',undefined,b)).status,200);
       assert.equal((await call('/api/me','GET',undefined,b)).payload.user,null);
+      // Concurrency regression: two students racing for the final bed must not overbook.
+      const raceRoom = await call('/api/rooms', 'POST', {
+        code:`R${suffix}`,building:'Race testing',floor:1,capacity:1
+      },adminCookie);
+      assert.equal(raceRoom.status,201);
+      const competitors=[];
+      for (const name of ['race-a','race-b']) {
+        const email=`${name}-${suffix}@example.test`;
+        assert.equal((await call('/api/auth/register','POST',{
+          name,email,password:studentPassword
+        })).status,201);
+        const signedIn=await login(email);
+        assert.equal(signedIn.status,200);
+        const created=await call('/api/applications','POST',{
+          preferred_room_id:raceRoom.payload.id,note:'Concurrency regression test'
+        },signedIn.cookie);
+        assert.equal(created.status,201);
+        competitors.push({id:created.payload.id,cookie:signedIn.cookie});
+      }
+      const approvals=await Promise.all(competitors.map(c=>call(`/api/applications/${c.id}/decision`,'POST',{
+        decision:'approve',room_id:raceRoom.payload.id
+      },adminCookie)));
+      assert.deepEqual(approvals.map(r=>r.status).sort((x,y)=>x-y),[200,409]);
+      const afterRace=await call('/api/rooms','GET',undefined,adminCookie);
+      const resolvedRoom=afterRace.payload.rooms.find(r=>r.id===raceRoom.payload.id);
+      assert.equal(resolvedRoom.occupied,1);
+      assert.equal(resolvedRoom.available,0);
+      const allocationsAfterRace=await call('/api/allocations','GET',undefined,adminCookie);
+      assert.equal(allocationsAfterRace.payload.allocations.filter(a=>a.room_id===raceRoom.payload.id).length,1);
+      assert.equal((await call('/api/rooms','POST',{
+        code:'INVALID',building:'A',floor:1,capacity:21
+      },adminCookie)).status,400);
     } finally {
       await new Promise((resolve,reject)=>server.close(err=>err?reject(err):resolve()));
     }

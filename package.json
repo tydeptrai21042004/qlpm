@@ -1,17 +1,22 @@
 {
   "name": "co3011-campus-housing",
-  "version": "4.0.0",
+  "version": "5.0.0",
   "private": true,
-  "description": "Campus Housing student residence management: one Vercel Express project with Neon PostgreSQL",
+  "description": "Campus Housing system: Express backend, Neon PostgreSQL and responsive student/staff portal on Vercel",
   "type": "module",
-  "engines": {
-    "node": ">=22"
-  },
+  "engines": { "node": ">=22" },
   "scripts": {
     "start": "node --env-file-if-exists=.env.local server.js",
     "dev": "node --watch --env-file-if-exists=.env.local server.js",
     "db:setup": "node --env-file-if-exists=.env.local scripts/setup-db.js",
-    "test": "node --test tests/*.test.js"
+    "test": "node --test tests/*.test.js",
+    "test:unit": "node --test tests/unit.test.js",
+    "test:source": "node --test tests/source.test.js",
+    "test:api": "node --test tests/api.test.js",
+    "test:integration": "node --env-file-if-exists=.env.test --test tests/integration.test.js",
+    "test:coverage": "node --experimental-test-coverage --test tests/*.test.js",
+    "test:ui": "python scripts/visual-smoke.py",
+    "check": "node --check server.js && node --check backend/app.js && npm run test:unit && npm run test:source"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.0.0",

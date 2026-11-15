@@ -1,119 +1,119 @@
-# Campus Housing — CO3011 (v4)
+# Campus Housing
 
-Single-repository student dormitory management application. The same Vercel project serves the frontend and Express API; Neon stores persistent data. It is a **course project with production-oriented engineering practices**, not a certified university production system.
+A student residence management application for CO3011 Software Project Management. The system contains a browser frontend, an Express API, and a Neon PostgreSQL database. **There is a real backend; it is not a static frontend or a localStorage demo.** Version 5 makes that backend visible and adds automated API, validation, and database tests.
 
-## Tech stack
+## Architecture
 
-- Frontend: HTML + CSS + JavaScript (no build pipeline or client framework).
-- Backend: Node.js 22+, Express 5 (`server.js`), deployed as Vercel Node.js Functions.
-- Database: Neon PostgreSQL through `@neondatabase/serverless`.
-- Authentication: scrypt password hashes, server-side session tokens, `HttpOnly` + `SameSite=Strict` cookies; Secure in production.
-- One domain, one repository, relative `/api/` URLs, no separate frontend/backend deployment.
+```
+CO3011_Campus_Housing_Pro_V5/
+├── server.js                     Node/Vercel entrypoint (exports Express app)
+├── backend/
+│   ├── app.js                    App factory, security middleware, error handler
+│   ├── db/index.js               Neon driver, SQL schema and bootstrap
+│   ├── domain/policies.js        Request validation and business input rules
+│   ├── lib/context.js            Authentication session and side effects
+│   ├── lib/password.js           Scrypt password hashing
+│   ├── lib/validation.js         IDs, text, cookie and authorization rules
+│   └── routes/
+│       ├── auth.js               Sign-in, registration, profile, password
+│       ├── rooms.js              Rooms and resident rosters
+│       ├── people.js             Student/staff directories
+│       ├── applications.js       Dormitory applications and decisions
+│       ├── allocations.js        Room assignment and check-out history
+│       ├── housing.js            Room transfers and move-out requests
+│       ├── announcements.js      Staff notices and residence audience rules
+│       ├── requests.js           Maintenance requests and conversations
+│       ├── notifications.js      Inbox and read receipts
+│       └── audit.js              Staff activity history
+├── db/index.js                   Legacy compatibility re-export
+├── public/                       Browser frontend: HTML, CSS, JavaScript
+├── tests/
+│   ├── unit.test.js              Executable domain/validation tests
+│   ├── api.test.js               Real Express HTTP tests with fake SQL driver
+│   ├── integration.test.js       Real Neon end-to-end workflow (opt-in)
+│   ├── source.test.js            Source/structure consistency checks
+│   └── README.md                 Test prerequisites and limitations
+├── scripts/setup-db.js          Initialize schema and staff bootstrap
+├── scripts/visual-smoke.py      Browser smoke tests with synthetic data
+├── .github/workflows/ci.yml     Unit and mock API checks in GitHub Actions
+└── docs/                         API reference, scope, traceability, use cases
+```
 
-## Features
+**Request path:** browser `fetch('/api/...')` → Express security middleware → session loaded from Neon → role/ownership checks → route handler → parameterized PostgreSQL query → JSON response. The frontend does not receive a database connection string.
 
-| Student | Residence office |
+## Current functions
+
+| Student | Residence staff |
 |---|---|
-| Register, sign in and update profile/password | Staff-only sign in and protected dashboard |
-| Browse room capacity and availability | Add/edit rooms, update bed capacity and active status |
-| Submit housing request with preferred room | Approve/reject with review notes, atomic room assignment |
-| Track or withdraw a pending application | View applications, student directory and check out students |
-| Submit residence support tickets with priority | Assign tickets, change status/priority, record resolution |
-| Exchange replies in a ticket conversation | Reply to students and track request progress |
-| Read application/request notifications | View operational events and check-out history |
-| Request a room transfer or a managed move-out | Approve/decline requests with transactional occupancy adjustments |
-| Read residence announcements and building notices | Publish, edit, pin and archive targeted announcements |
-| Browse room status and occupancy | Inspect each room’s current resident roster |
-| Search pages, rooms and requests using Ctrl+K | Search, sort, filter and page through records; export filtered CSV |
-| Mobile self-service navigation | Operations reports computed from live records |
+| Register and sign in | Sign in as staff (bootstrapped from environment variables) |
+| View rooms and current capacity | Create, edit, activate/deactivate rooms, inspect resident roster |
+| Submit/withdraw accommodation application | Review pending applications and allocate rooms |
+| View own room assignment | Check out residents with history retained |
+| Submit room transfer or move-out request | Review transfer/move-out requests |
+| Open and reply to maintenance tickets | Assign, prioritize and resolve service tickets |
+| Read personal notifications and relevant notices | Publish and archive notices by building or whole residence |
+| Change profile name and password | View student directory, reports and audit log |
 
-### Business rules implemented
+**Important domain rules:** only one active accommodation application or allocation per student; capacity-checked approval; pending housing change limited to one per resident; no unauthorized student access to staff operations or other students' requests; resolution notes required when closing service requests. These are *proposed rules for the assignment*, not policies confirmed by the client.
 
-- A student has at most one pending/approved housing application and at most one active room allocation.
-- A preferred room is a request, not a reservation. Staff choose the final room.
-- Approval atomically checks that a room is active and has capacity, then creates the allocation. No beds can be overbooked by concurrent approvals.
-- An occupied room cannot be disabled or given a capacity below current occupancy.
-- Students may withdraw only their own pending applications. Rejections require a staff note.
-- Check-out frees the bed, closes the approved application, preserves a checkout-history record, and cancels any pending change request when staff directly checks out a resident.
-- Students with a room may request a transfer to a different available room or a move-out. Only one such request may be pending. Staff approvals update room counters and allocation in a single SQL statement. Transfers are recorded in allocation-transfer history.
-- Published announcements may target all residents or one building. Building notices are visible only to students currently allocated in that building. Staff can pin and archive notices or set expiry dates.
-- A resolved service request requires a resolution note. Students can view and reply to only their own requests.
+## Local setup
 
-These are **proposed policies**, not confirmed policies from the lecturer or client. Final acceptance scope must be agreed through the CO3011 client-consultation process.
-
-## Deploy to Vercel and Neon
-
-1. Create a Neon project at https://console.neon.tech/ and copy its pooled PostgreSQL connection URL with `sslmode=require`.
-2. Push this folder to GitHub. Keep `.env.local` and `node_modules/` out of Git.
-3. Go to https://vercel.com/new, import the GitHub repository, and create **one** project. Set project Root Directory to the directory containing `package.json`. Use Node.js 22 (or a newer supported runtime). No `vercel.json` or frontend build step is needed for this setup.
-4. Under Vercel → Project → Settings → Environment Variables, configure:
-
-   | Name | Required | Meaning |
-   |---|---|---|
-   | `DATABASE_URL` | Yes | Neon PostgreSQL URL, server-side only |
-   | `ADMIN_EMAIL` | Yes for staff access | Initial residence staff email |
-   | `ADMIN_PASSWORD` | Yes with ADMIN_EMAIL | Strong password (12+ characters, letters and digits) |
-   | `ADMIN_NAME` | No | Display name for initial staff account |
-   | `SEED_SAMPLE_ROOMS` | No | `true` inserts four example rooms once (per room code) |
-   | `PORT` | Local only | Default `3000` |
-
-5. Deploy. On the first API request, the backend creates tables, adds optional columns to a database from the previous version, and creates the first staff account if absent. Visit `https://YOUR-PROJECT.vercel.app/api/health`; expect `{ "ok": true }`. Then open `/`.
-6. Sign in with `ADMIN_EMAIL` / `ADMIN_PASSWORD`. Students can register directly through the UI.
-
-**Upgrade from the original ZIP:** Point this version at the same Neon database. The `CREATE TABLE IF NOT EXISTS` and `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` statements preserve earlier users/rooms/applications/allocations/requests. **Back up your Neon database or create a Neon branch before updating a live deployment.** This is a forward-only schema upgrade; do not roll back code without reviewing schema compatibility.
-
-**Bootstrap note:** Environment variables do not reset an existing staff account password on redeploy. Use Account settings to change it. If you need additional staff accounts, provision them through an approved administrative process; public registration cannot create staff accounts.
-
-## Local development
+Install Node.js 22+ and connect a **development Neon branch**. Do not commit secrets or use a production database for test data.
 
 ```bash
 cp .env.example .env.local
-# Fill DATABASE_URL, ADMIN_EMAIL, ADMIN_PASSWORD in .env.local
+# Fill in DATABASE_URL, ADMIN_EMAIL, ADMIN_PASSWORD
 npm install
 npm run db:setup
 npm run dev
 ```
 
-Open http://localhost:3000. Node.js 22+ is required. `npm run db:setup` is optional if the app can initialize on first request. Use a **separate Neon development branch**, not the production database, during local development and integration tests.
+Visit http://localhost:3000. The initial staff account is created when its configured email does not yet exist. Subsequent redeployments do **not** reset its password.
+
+### Backend verification
+
+After starting the application, open:
+
+- `http://localhost:3000/api/health` — HTTP process alive, does not require the database
+- `http://localhost:3000/api/ready` — actually verifies Neon connectivity and schema initialization
+- `http://localhost:3000/api/me` — returns `{"user":null}` until logged in
+
+The complete endpoint reference is in [`docs/API_REFERENCE.md`](docs/API_REFERENCE.md).
 
 ## Tests
 
 ```bash
-npm test
+npm run check                # syntax + dependency-free unit/source checks
+npm test                     # all Node tests; Neon test skipped without a test URL
+npm run test:api             # actual HTTP requests against Express and a fake SQL adapter
+npm run test:coverage        # coverage for actually executed tests
+npm run test:ui              # needs Python Playwright + local Chromium
 ```
 
-Source checks and API/frontend static checks run without a database. Browser rendering can be checked with `python scripts/visual-smoke.py` if Playwright for Python and Chromium are installed; it uses synthetic API data, not a live backend. Full integration tests run only when `TEST_DATABASE_URL` points to a **disposable Neon branch**; they create test data. To enable:
+For an end-to-end test against an **isolated/disposable Neon branch**:
 
 ```bash
-TEST_DATABASE_URL='postgresql://...' npm test
+TEST_DATABASE_URL='postgresql://...' npm run test:integration
 ```
 
-Do not point `TEST_DATABASE_URL` at production. Verification steps for the human acceptance demonstration are in `docs/USE_CASES.md` and `docs/TEST_MATRIX.md`.
+Use PowerShell `$env:TEST_DATABASE_URL="..."` on Windows. The integration suite creates persistent test accounts and room records. Delete the disposable branch when finished. See [`tests/README.md`](tests/README.md) for a clear separation between unit, mocked HTTP, real database, and browser tests.
 
-## Security and operational considerations
+**What has been checked here:** JavaScript syntax; 12 unit test groups; 6 source/structure groups; 11 staff + 8 student browser views using synthetic responses and mobile widths. **What has not been checked here:** installed-dependency HTTP tests, real Neon transactions, Vercel deployment, or a live user journey. Package installation was unavailable in the execution environment because the npm registry was unreachable. Do not claim those tests passed.
 
-- SQL queries are parameterized; private connection strings stay server-side.
-- Students are restricted to their own applications, tickets, messages and notifications by server-side checks.
-- Authentication sessions are hashed in the database. Cookie writes are guarded by same-origin checks. Security headers include a restrictive content security policy and frame protection.
-- A per-email failed-login lockout reduces password guessing, but is **not** a complete distributed brute-force/DDoS defense. Public sign-up is suitable only for an agreed classroom demo.
-- Notifications and activity events are best-effort secondary writes. The activity log is not tamper-proof and is not a substitute for independent project-management records.
-- Before using real student records, add managed university SSO, account verification/recovery, institutional privacy/legal review, role provisioning, retention/deletion policy, stronger rate limiting, database migrations managed outside request time, monitoring, backup/recovery drills, accessibility audits, and full database-backed deployment tests.
-- Do not store real student personal information for course demonstrations. Use fictional accounts and rooms.
+## Deploy as one Vercel project
 
-## CO3011 project management obligations
+1. Push the extracted folder to a Git repository (without `.env.local`).
+2. Import the repository into one Vercel project, pointing its root to this folder.
+3. Set Vercel environment variables `DATABASE_URL`, `ADMIN_EMAIL`, `ADMIN_PASSWORD` and optional `ADMIN_NAME` / `SEED_SAMPLE_ROOMS`.
+4. Deploy, open `/api/ready` and confirm Neon is ready, then sign in to the UI.
+5. Test on a Neon branch before connecting a database containing important records.
 
-The lecturer assesses planning and execution evidence as well as functioning software. This repository provides an implementation, proposed use cases, proposed traceability and example test cases; it **does not** invent client meetings or actual effort logs. The team must provide its own Client Interaction Log, scope decisions, baseline V1.0 (and approved revisions), PBS/PD/PFD, effort and resource estimates, Gantt/risks, weekly actuals, change analysis, verification evidence, final project report, and individual reflections. The final report must disclose the use of generative AI and the tasks it supported.
+The root `server.js` default-exports the Express app and Vercel can detect it without a separate frontend/backend deployment. Database tables are created by `npm run db:setup` (or on the first database-backed request). Prefer explicit database migration management for any later production expansion.
 
-See `docs/CO3011_TASK_CHECKLIST.md`, `docs/PROJECT_BRIEF_AND_SCOPE.md`, `docs/PROPOSED_TRACEABILITY.md`, `docs/USE_CASES.md`, `docs/TEST_MATRIX.md`, and `docs/API_REFERENCE.md`.
+## Release and security limitations
 
-## New in v4: operational flows and visual design
+This is a course-project implementation, not a university-certified service. Before using real student information, add verified university identity/SSO, staff account lifecycle procedures, persistent rate limiting, monitored migration jobs, backup/recovery tests, retention policies, accessibility checks, and independent security review. The audit log is best-effort, not an immutable ledger.
 
-The resident and staff workspaces are now separate experiences rather than reused tables. The staff homepage prioritizes decisions needing attention and shows factual occupancy by building. The student homepage prioritizes the current room, active issues, and relevant notices. Both now use a light institutional sidebar, mobile navigation drawer, global Ctrl+K command search, readable typography, responsive panels, and consistent dialogs. Long tables support sorting, filtering, ten-row pagination and CSV export of the filtered results.
+## CO3011 assessment evidence
 
-**Residence announcements:** staff create notices with a title/body, audience (`all` or one building), pin and optional expiry. Student visibility uses the allocation-to-room-building relationship, not a user-entered building label. Archived and expired notices do not appear to students. Residents have read-only access.
-
-**Housing changes:** an allocated student can submit one pending request to move out or transfer to an active room with spare capacity. Staff approve/decline with an optional note (required on rejection). Transfer approval shifts occupancy from one room to another and keeps movement history; move-out approval records an ordinary check-out. A rejected or cancelled request allows another request. The preferred destination can become unavailable before approval, in which case approval fails safely.
-
-**Deployment compatibility:** this version adds `housing_changes`, `allocation_transfers` and `announcements` without dropping the existing dormitory tables. A notification check constraint is widened to allow housing-change update targets. Use a Neon branch/backup to verify the migration before applying to any important database.
-
-**Current verification boundary:** 6 offline source checks passed and the optional database test is skipped without `TEST_DATABASE_URL`. The mocked Chromium test rendered 11 staff and 8 student views with no JavaScript page errors or 390px horizontal overflow. A live Neon/Vercel deployment, transactional behavior under concurrency, and end-to-end institutional security assessment were not verified in this environment. Package installation was not possible here because the registry connection could not be established; run `npm install` on an internet-connected machine or in Vercel.
+The assignment requires genuine client consultation, project baseline V1.0, revised baseline when approved, PBS/PFD, estimates, risks, resources, weekly actuals, change decisions, verification evidence and individual contributions. The code and draft traceability files are useful starting points; they are **not substitutes for actual project-management evidence**. Disclose AI-assisted development in the final report as required by the assignment.

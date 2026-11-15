@@ -1,6 +1,6 @@
 # Proposed test and acceptance matrix
 
-Status: tests below are **planned acceptance cases**, not proof that a Neon-backed deployment has passed. `npm test` includes automated source checks and optional Neon integration coverage. Record manual run date, tester, evidence and outcome once performed.
+Status: tests below are **planned acceptance cases**, not proof that a Neon-backed deployment has passed. `npm test` includes executable validation/unit tests, Express HTTP-contract tests (after dependencies are installed), source checks, and optional real-Neon integration coverage. See `tests/README.md`. Record manual run date, tester, evidence and outcome once performed.
 
 | Test | Use case | Condition | Expected result |
 |---|---|---|---|

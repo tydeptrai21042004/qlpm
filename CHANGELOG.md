@@ -1,3 +1,16 @@
+# Revision 5.0 — Explicit backend structure and test coverage
+
+- Moved the real Express API into `backend/` route modules. The root `server.js` remains a thin Vercel entrypoint. The Neon driver and database schema now live at `backend/db/index.js` with a compatibility import from `db/index.js`.
+- Introduced `createApp(adapter)` dependency injection for real HTTP route tests that use a deterministic SQL test adapter, without touching production credentials.
+- Extracted business input policies from handlers for direct unit testing (rooms, announcements, tickets, housing changes).
+- Added 12 executable unit test groups, 6 source checks, an HTTP contract suite with 13 subtests after `npm install`, and a real-Neon concurrency regression case for last-bed approvals.
+- Added CI on push/pull request, a test strategy guide, and dedicated liveness (`/api/health`) and Neon readiness (`/api/ready`) endpoints.
+- Strengthened integer and announcement-flag validation.
+- Original client UI and core database workflows are retained; no real student data was imported.
+- Verification here: unit/source checks and mocked-browser smoke passed. Live Neon and installed-dependency HTTP tests were not run in this environment.
+
+---
+
 # Revision 4.0 — Residence workflows and product UI
 
 The existing single Vercel Express project and Neon schema have been retained and extended.

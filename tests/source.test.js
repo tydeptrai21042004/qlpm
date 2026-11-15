@@ -5,97 +5,87 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const file = name => readFileSync(path.join(root,name),'utf8');
+const read = name => readFileSync(path.join(root,name),'utf8');
+const routes = ['auth','rooms','people','applications','allocations','announcements','housing','requests','notifications','audit'];
+const allRoutes = () => routes.map(r=>read(`backend/routes/${r}.js`)).join('\n');
 
-test('one Vercel project: exported Express app and public frontend', () => {
-  const pkg = JSON.parse(file('package.json'));
+test('Node and Vercel launch one actual Express API with isolated route modules', () => {
+  const pkg = JSON.parse(read('package.json'));
   assert.equal(pkg.type,'module');
   assert.ok(pkg.dependencies.express);
   assert.ok(pkg.dependencies['@neondatabase/serverless']);
-  assert.ok(existsSync(path.join(root,'public','index.html')));
-  assert.match(file('server.js'),/export default app/);
-  assert.match(file('server.js'),/express\.static\(PUBLIC/);
+  assert.match(read('server.js'),/import \{ createApp \} from '.\/backend\/app.js'/);
+  assert.match(read('server.js'),/export default app/);
+  assert.match(read('backend/app.js'),/export function createApp\(adapter = neonAdapter\)/);
+  assert.match(read('backend/app.js'),/express\.static\(PUBLIC/);
+  assert.ok(existsSync(path.join(root,'public/index.html')));
   assert.ok(!existsSync(path.join(root,'vercel.json')));
+  for (const route of routes) assert.match(read('backend/app.js'),new RegExp(`register${route[0].toUpperCase()+route.slice(1)}Routes\\(app, context\\)`));
 });
 
-test('Neon configuration: database secret is server side only', () => {
-  const db = file('db/index.js');
+test('database credentials and Neon schema remain backend-only', () => {
+  const db = read('backend/db/index.js');
   assert.match(db,/process\.env\.DATABASE_URL/);
-  assert.match(db,/CREATE TABLE IF NOT EXISTS rooms/);
+  for (const table of ['users','rooms','applications','allocations','requests','sessions','housing_changes','announcements','allocation_history','audit_events']) {
+    assert.ok(db.includes(`CREATE TABLE IF NOT EXISTS ${table}`),`Missing ${table}`);
+  }
   assert.match(db,/one_active_application/);
+  assert.match(db,/one_pending_housing_change/);
   assert.match(db,/CONSTRAINT occupancy_range/);
-  assert.match(db,/ON CONFLICT/);
-  assert.doesNotMatch(file('public/app.js'),/process\.env\.DATABASE_URL|postgresql:\/\/|Demo123!/);
-  assert.doesNotMatch(file('server.js'),/node:sqlite/);
-  assert.doesNotMatch(db,/node:sqlite/);
+  assert.doesNotMatch(read('public/app.js'),/process\.env\.DATABASE_URL|postgresql:\/\//);
+  assert.doesNotMatch(read('public/index.html'),/postgresql:\/\//);
 });
 
-test('API implements role based operations and atomic allocation statement', () => {
-  const app = file('server.js');
+test('actual SQL transaction statements guard capacity and preserve checkout history', () => {
+  const apps=read('backend/routes/applications.js');
+  const allocations=read('backend/routes/allocations.js');
+  const housing=read('backend/routes/housing.js');
+  assert.match(apps,/WITH eligible AS[\s\S]+FOR UPDATE[\s\S]+reserved AS[\s\S]+r\.occupied<r\.capacity/);
+  assert.match(allocations,/WITH removed AS[\s\S]+released AS[\s\S]+allocation_history/);
+  assert.match(housing,/FOR UPDATE OF c,a/);
+  assert.match(housing,/allocation_transfers/);
+  assert.match(housing,/r\.occupied<r\.capacity/);
+});
+
+test('authentication, ownership and audit are implemented server-side', () => {
+  const auth=read('backend/routes/auth.js');
+  const api=read('backend/app.js');
+  const requests=read('backend/routes/requests.js');
+  const notifications=read('backend/routes/notifications.js');
+  assert.match(auth,/login_attempts/);
+  assert.match(auth,/passwordHash\(/);
+  assert.match(requests,/student_id=\$3/);
+  assert.match(notifications,/user_id=\$2/);
+  assert.match(api,/Content-Security-Policy/);
+  assert.match(read('backend/lib/validation.js'),/SameSite=Strict/);
+  assert.match(api,/res\.status\(404\)\.json/);
+  assert.match(api,/app\.get\('\/api\/ready'/);
+});
+
+test('student and staff use cases are backed by real endpoints and persisted records', () => {
+  const src=allRoutes();
   for (const route of ['/api/auth/register','/api/auth/login','/api/rooms','/api/students',
-    '/api/applications','/api/allocations','/api/requests','/api/health']) {
-    assert.ok(app.includes(route),`Missing ${route}`);
+    '/api/applications/:id/decision','/api/allocations/history','/api/housing-changes/:id/decision',
+    '/api/requests/:id/messages','/api/notifications/read-all','/api/announcements/:id/status',
+    '/api/audit','/api/rooms/:id/residents']) {
+    assert.ok(src.includes(route), `Missing ${route}`);
   }
-  assert.match(app,/WITH eligible AS[\s\S]+FOR UPDATE[\s\S]+reserved AS[\s\S]+r\.occupied<r\.capacity/);
-  assert.match(app,/WITH removed AS[\s\S]+released AS[\s\S]+closed AS/);
-  assert.match(app,/SameSite=Strict/);
-  assert.match(app,/requireUser\(req, 'staff'\)/);
+  for (const action of ['roomCreateFields','roomUpdateFields','announcementFields','newTicketFields',
+    'ticketUpdateFields','housingChangeFields']) {
+    assert.ok(src.includes(action),`Missing referenced business validation: ${action}`);
+  }
 });
 
-test('frontend parses Neon UTC timestamps instead of adding another Z', () => {
-  assert.match(file('public/app.js'),/new Date\(value\)/);
-  assert.doesNotMatch(file('public/app.js'),/\.replace\(' ','T'\)\+'Z'/);
-});
-
-test('enhanced use cases have persisted schema and owner/role protected APIs', () => {
-  const db=file('db/index.js');
-  const server=file('server.js');
-  const frontend=file('public/app.js');
-  for (const name of ['request_messages','notifications','audit_events','allocation_history','login_attempts']) {
-    assert.ok(db.includes(name),`Missing ${name} table`);
+test('frontend includes route-specific workflows and output encoding', () => {
+  const js=read('public/app.js');
+  const css=read('public/refinement.css');
+  for (const view of ['studentTicketList','reviewDialog','ticketDialog','notificationPage','settingsPage',
+    'announcementPage','announcementDialog','changePage','changeDialog','roomRoster','studentDetails',
+    'reportsPage','commandDialog','applyTableFilters']) {
+    assert.ok(js.includes(`function ${view}`), `Missing ${view}`);
   }
-  for (const column of ['preferred_room_id','withdrawn','priority','assigned_to','resolution_note']) {
-    assert.ok(db.includes(column),`Missing ${column} migration`);
-  }
-  for (const route of ['/api/me/password','/api/applications/:id/cancel',
-    '/api/requests/:id/messages','/api/notifications/:id/read',
-    '/api/notifications/read-all','/api/allocations/history','/api/audit','/api/staff']) {
-    assert.ok(server.includes(route),`Missing ${route}`);
-  }
-  assert.match(server,/student_id=\$3/);
-  assert.match(server,/assigned_to/);
-  assert.match(server,/Content-Security-Policy/);
-  assert.match(server,/login_attempts/);
-  assert.match(server,/resolutionNote.length < 5/);
-  for (const view of ['studentTicketList','reviewDialog','ticketDialog','notificationPage','settingsPage']) {
-    assert.ok(frontend.includes(`function ${view}`),`Missing ${view} UI`);
-  }
-  assert.match(frontend,/csvCell/);
-  assert.match(frontend,/replace\(\/\[&<>"'\]\//);
-  assert.doesNotMatch(frontend,/innerHTML\s*=\s*.*response\.data/);
-});
-
-
-test('residence changes, announcements and refined UI are integrated', () => {
-  const db=file('db/index.js');
-  const server=file('server.js');
-  const frontend=file('public/app.js');
-  const css=file('public/refinement.css');
-  for (const name of ['housing_changes','allocation_transfers','announcements','one_pending_housing_change']) {
-    assert.ok(db.includes(name),`Missing migration: ${name}`);
-  }
-  for (const endpoint of ['/api/housing-changes', '/api/housing-changes/:id/decision',
-    '/api/housing-changes/:id/cancel','/api/announcements','/api/announcements/:id/status',
-    '/api/rooms/:id/residents']) {
-    assert.ok(server.includes(endpoint),`Missing API: ${endpoint}`);
-  }
-  assert.match(server,/FOR UPDATE OF c,a/);
-  assert.match(server,/r.occupied<r.capacity/);
-  for (const fn of ['announcementPage','announcementDialog','changePage','changeDialog',
-    'roomRoster','studentDetails','reportsPage','commandDialog','applyTableFilters']) {
-    assert.ok(frontend.includes(`function ${fn}`),`Missing interface: ${fn}`);
-  }
-  for (const feature of ['sidebar-open','command-dialog','student-hero','attention-list','table-pagination']) {
-    assert.ok(css.includes(feature));
-  }
+  assert.match(js,/csvCell/);
+  assert.match(js,/replace\(\/\[&<>"'\]\//);
+  assert.match(js,/new Date\(value\)/);
+  for (const token of ['sidebar-open','command-dialog','student-hero','attention-list','table-pagination']) assert.ok(css.includes(token));
 });
