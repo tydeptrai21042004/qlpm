@@ -46,3 +46,7 @@
 - [ ] Declaration of AI tools used and tasks supported
 
 Milestone and final deadlines: check LMS; the provided PDF states TBD for final.
+
+## Evidence Center – V9 implementation note
+
+Staff users can record real evidence and export it through the new **Hồ sơ CO3011** screen. The app checks presence of major deliverable categories and some specific counts (e.g., at least 5 Product Descriptions), but it does **not** complete these tasks automatically. Keep each checkbox unchecked until actual data, client responses, approved plans and test outcomes have been verified by the team. Consult `docs/CO3011_EVIDENCE_EXPORT.md` for evidence mapping and data limitations.

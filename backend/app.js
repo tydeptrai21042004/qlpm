@@ -14,6 +14,7 @@ import { registerRequestsRoutes } from './routes/requests.js';
 import { registerNotificationsRoutes } from './routes/notifications.js';
 import { registerAuditRoutes } from './routes/audit.js';
 import { registerRoomInspectionsRoutes } from './routes/room-inspections.js';
+import { registerEvidenceRoutes } from './routes/evidence.js';
 import { ApiError } from './lib/validation.js';
 
 const PUBLIC = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'public');
@@ -56,7 +57,7 @@ export function createApp(adapter = neonAdapter) {
     } catch (error) { next(error); }
   });
   app.use('/api', (req, res, next) => {
-    if (['POST', 'PUT', 'PATCH'].includes(req.method) && req.path !== '/auth/logout') {
+    if (['POST', 'PUT', 'PATCH'].includes(req.method) && req.path !== '/auth/logout' && !/^\/evidence\/\d+\/file$/.test(req.path)) {
       if (!req.is('application/json')) return res.status(415).json({ error: 'Content-Type must be application/json.' });
       if (!req.body || typeof req.body !== 'object' || Array.isArray(req.body)) {
         return res.status(400).json({ error: 'Expected a JSON object.' });
@@ -82,6 +83,7 @@ export function createApp(adapter = neonAdapter) {
   registerNotificationsRoutes(app, context);
   registerAuditRoutes(app, context);
   registerRoomInspectionsRoutes(app, context);
+  registerEvidenceRoutes(app, context);
 
   app.use('/api', (_req, res) => res.status(404).json({ error:'API endpoint not found.' }));
   app.use(express.static(PUBLIC, { index:'index.html', dotfiles:'deny' }));

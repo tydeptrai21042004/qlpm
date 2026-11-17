@@ -5,7 +5,7 @@ const toast = document.getElementById('toast');
 const state = {
   user:null, view:'overview', authMode:'login', rooms:[], students:[], staff:[],
   applications:[], allocations:[], requests:[], notifications:[], events:[], history:[],
-  announcements:[], changes:[], inspections:[], busy:false, syncedAt:null
+  announcements:[], changes:[], inspections:[], evidence:null, evidenceFilter:'all', busy:false, syncedAt:null
 };
 const esc = value => String(value == null ? '' : value).replace(/[&<>"']/g,
   c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -40,6 +40,7 @@ const icons = {
   plus:'<path d="M12 4v16M4 12h16"/>',
   download:'<path d="M12 3v13m-5-5 5 5 5-5M4 18v3h16v-3"/>',
   arrow:'<path d="M5 12h14m-6-6 6 6-6 6"/>',
+  evidence:'<path d="M4 4h16v16H4zM8 9h8M8 13h8M8 17h5"/>',
   inspections:'<path d="M8 3H5v18h14V3h-3M9 3h6v4H9zM8 12l2 2 4-4M8 18h7"/>',
   checklist:'<path d="M9 3H4v18h16V3h-5M9 3V2h6v1M8 12l2 2 4-4M8 18h8"/>',
   guide:'<circle cx="12" cy="12" r="9"/><path d="M9 9a3 3 0 1 1 5 3c-2 1-2 2-2 3m0 3h.01"/>',
@@ -88,7 +89,7 @@ async function api(url,method='GET',body) {
 }
 function navItems(){
   return state.user.role==='staff'
-    ? [['overview','Tổng quan'],['applications','Đăng ký nội trú'],['changes','Chuyển / trả phòng'],['rooms','Phòng ở'],['students','Sinh viên'],['requests','Yêu cầu Một cửa'],['announcements','Bảng tin'],['reports','Thống kê'],['activity','Nhật ký'],['inspections','Kiểm tra phòng'],['inbox','Thông báo'],['guide','Cẩm nang KTX'],['settings','Cài đặt']]
+    ? [['overview','Tổng quan'],['applications','Đăng ký nội trú'],['changes','Chuyển / trả phòng'],['rooms','Phòng ở'],['students','Sinh viên'],['requests','Yêu cầu Một cửa'],['announcements','Bảng tin'],['reports','Thống kê'],['evidence','Hồ sơ CO3011'],['activity','Nhật ký'],['inspections','Kiểm tra phòng'],['inbox','Thông báo'],['guide','Cẩm nang KTX'],['settings','Cài đặt']]
     : [['overview','Tổng quan'],['applications','Đăng ký nội trú'],['changes','Chuyển / trả phòng'],['rooms','Phòng trống'],['requests','Yêu cầu Một cửa'],['announcements','Bảng tin'],['inbox','Thông báo'],['checklist','Nhận phòng'],['inspections','Kiểm tra phòng'],['guide','Cẩm nang KTX'],['settings','Cài đặt']];
 }
 function renderAuth(){
@@ -120,6 +121,7 @@ async function loadData(){
   const results=await Promise.all(keys.map(k=>api(`/api/${k}`)));
   keys.forEach((key,i)=>state[key==='housing-changes'?'changes':key==='room-inspections'?'inspections':key]=results[i][key==='housing-changes'?'changes':key==='room-inspections'?'inspections':key]);
   if(state.view==='activity') await loadActivity();
+  if(state.view==='evidence') await loadEvidence();
   state.syncedAt=new Date();
   renderApp();
 }
@@ -133,6 +135,7 @@ async function navigate(view){
   state.view=view;
   location.hash=view;
   if(view==='activity')await loadActivity();
+  if(view==='evidence')await loadEvidence();
   renderApp();
 }
 function section(title,subtitle='',controls=''){
@@ -684,6 +687,7 @@ function staffPage(){
         `${s.name} ${s.email} ${s.room_code||''}`,s.allocation_id?'assigned':'unassigned')))}`)}`;
   if(state.view==='requests')return `${section('Dịch vụ Một cửa','Tiếp nhận và xử lý các yêu cầu sinh viên nội trú.')}
     ${panel('Danh sách yêu cầu',`${filters('Tìm yêu cầu, sinh viên hoặc dịch vụ',[['open','Mới tiếp nhận'],['in_progress','Đang xử lý'],['resolved','Hoàn tất']],'requests')}${requestTable(true)}`)}`;
+  if(state.view==='evidence')return evidencePage();
   if(state.view==='activity')return `${section('Nhật ký vận hành','Theo dõi thay đổi hệ thống và lịch sử trả phòng.')}
     <div class="stack-panels">${panel('Hoạt động hệ thống',table(['Thời gian','Người thao tác','Thao tác','Chi tiết'],state.events.map(e=>
       row(`<td>${date(e.created_at)}</td><td>${esc(e.actor_name)}</td><td>${esc(e.action.replaceAll('_',' '))}</td><td class="wrap">${esc(e.summary)}</td>`,
@@ -893,6 +897,7 @@ async function submit(form){
     const result=await api('/api/auth/login','POST',d);
     state.user=result.user;state.view='overview';location.hash='overview';await loadData();showToast('Đăng nhập thành công.');return;
   }
+  if(form.id==='evidence-form'){await submitEvidenceForm(form);return;}
   if(form.id==='apply-form') await api('/api/applications','POST',{note:d.note||'',preferred_room_id:d.preferred_room_id||null});
   else if(form.id==='request-form') await api('/api/requests','POST',d);
   else if(form.id==='inspection-form'){
@@ -959,6 +964,7 @@ async function handleClick(button){
   if(name==='toggle-sidebar'){
     document.body.classList.toggle('sidebar-open');return;
   }
+  if(name.startsWith('ev-')){if(await handleEvidenceAction(name,id,button))return;}
   if(name==='command')return commandDialog();
   if(name==='inspection-detail')return inspectionDetail(id);
   if(name==='print-inspection')return printInspection(id);
@@ -1088,6 +1094,8 @@ document.addEventListener('change',event=>{
     return;
   }
   if(event.target.matches('.table-filter')){const table=event.target.closest('.panel')?.querySelector('table.table');if(table)table.dataset.page=1;applyTableFilters();}
+  if(event.target.id==='ev_filter'){state.evidenceFilter=event.target.value;renderApp();return;}
+  if(event.target.id==='ev_kind'){evidenceForm(event.target.value);return;}
   if(event.target.id==='notice_audience')syncAudienceField();
   if(event.target.id==='change_kind')syncChangeType();
 });

@@ -45,3 +45,9 @@ The room inspection tests check student permissions, invalid states, client room
 - The UI smoke script stubs API responses and cannot prove a real frontend-to-Neon workflow.
 
 Before submission, record a passing Neon integration run and a manual/demo run against the deployed Vercel project. Add screenshots and meaningful Git commits as execution evidence for CO3011. Avoid declaring all tests passed if any were skipped.
+
+## V9 Project Evidence Center
+
+- `npm run test:evidence`: 12 pure and route-level checks for the CO3011 schema, validation, append-only baseline, staff guard, binary upload/download SHA-256, ZIP parts and CSV/HTML escaping. These do not require a live Neon connection.
+- `npm run test:ui:evidence`: Chromium + synthetic API UI test (create/view/filter/export links, mobile 390px). Synthetic records are test fixtures only and are **not saved to production**.
+- Test real `/api/evidence` and Neon BYTEA on a disposable Neon branch after deployment; save real results as QA evidence. Neither mocked route tests nor simulated browser screenshots establish production readiness.

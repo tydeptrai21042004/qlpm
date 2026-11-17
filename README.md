@@ -1,4 +1,4 @@
-# KTX Khu A · Cổng quản lý nội trú (CO3011, bản mô phỏng V8)
+# KTX Khu A · Cổng quản lý nội trú (CO3011, bản mô phỏng V9)
 
 Ứng dụng full-stack **Node.js 22 + Express 5 + Neon PostgreSQL + HTML/CSS/JavaScript**, triển khai **Frontend + Backend trong một dự án Vercel**. Xây dựng theo bối cảnh quản lý phòng ở và dịch vụ sinh viên của Ký túc xá Khu A, ĐHQG TP.HCM. **Đây là hệ thống mô phỏng phục vụ đồ án, không phải cổng chính thức.**
 
@@ -15,6 +15,8 @@
 - Xem bảng tin theo tòa, thông báo cá nhân **trong ứng dụng**, cẩm nang và các liên kết chính thức.
 
 **Dành cho nhân viên**
+
+- **Hồ sơ CO3011:** Project Evidence Center lưu Client Interaction Log, baseline bất biến, effort/actual, risk, test, traceability, handover, AI declaration; xuất ZIP (CSV/JSON/HTML/SVG + tệp PDF/ảnh) trực tiếp qua Vercel và Neon.
 
 - Xét duyệt hồ sơ, quản lý danh sách sinh viên/phòng, kiểm soát sức chứa, chuyển/trả phòng và lịch sử.
 - Phân công và xử lý yêu cầu Một cửa, phản hồi trao đổi, đăng/lưu trữ bảng tin theo tòa.
@@ -55,6 +57,8 @@ npm test           # Source, unit, kiểm thử phiếu phòng và API contract 
 npm run test:ui    # Browser smoke: Chromium / Playwright
 npm run test:api   # HTTP API contract nếu đã cài node_modules
 npm run test:ui:interactive # Luồng checklist / phiếu kiểm tra với API mock
+npm run test:evidence      # Validation, artifact export, archive, role guards
+npm run test:ui:evidence   # Browser smoke UI cho CO3011
 ```
 
 Để test PostgreSQL thật, tạo **nhánh Neon riêng chỉ dùng cho kiểm thử**, đặt `TEST_DATABASE_URL`, sau đó chạy `npm run test:integration`. Không trỏ test vào production.
@@ -72,6 +76,12 @@ Bộ test kiểm tra phiếu phòng gồm quyền sinh viên/nhân viên, trạn
 | `public/app.js` | SPA sinh viên/nhân viên, checklist, biểu mẫu, in phiếu |
 | `public/khu-a.css` | Giao diện Khu A responsive và bố cục in |
 | `docs/KTX_A_REFERENCE_AND_IMPLEMENTATION.md` | Phạm vi tham khảo nghiệp vụ, kiến trúc và giới hạn |
+
+## Project Evidence Center V9
+
+Đăng nhập vai trò **staff** → **Hồ sơ CO3011**. Nhập đúng dữ liệu và minh chứng thực tế (không có dữ liệu tự sinh). Chọn **Xuất bộ bằng chứng**, tải toàn bộ các phần ZIP rồi lưu để nộp. Mỗi ZIP hồ sơ có các file `coverage.json`, `evidence.json`, các CSV, `report.html` để mở trình duyệt và in thành PDF, và biểu đồ SVG (nếu đủ activity/weekly log). Tệp PDF/PNG/JPG/TXT/CSV đính kèm từng bản ghi được lưu trên Neon, mỗi tệp tối đa 850 KB, và xuất trong các ZIP tệp riêng. Trang `/api/evidence/report` cho phép in từng phần trực tuyến; cần đọc lại và viết báo cáo quản lý dự án cuối kỳ riêng.
+
+Vercel không phải ổ lưu file: bằng chứng được lưu Neon BYTEA/JSONB, không lưu `/tmp` hoặc filesystem runtime. Chỉ nhân viên đăng nhập mới được xem, ghi và xuất. Baseline V1.0 không ghi đè; thay đổi kế hoạch phải tạo version khác. **Không tạo nhật ký giả; không tự công nhận đã nghiệm thu.** Chi tiết và quy trình nghiệm thu: [`docs/CO3011_EVIDENCE_EXPORT.md`](docs/CO3011_EVIDENCE_EXPORT.md) và [`docs/VERCEL_V9_DEPLOYMENT.md`](docs/VERCEL_V9_DEPLOYMENT.md).
 
 ## Nâng cấp từ V5 / V6 / V7
 

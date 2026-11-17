@@ -1,3 +1,12 @@
+# V9 · CO3011 Evidence & Export (2026-11-17)
+
+- Bổ sung Evidence Center riêng cho nhân viên, gồm 15 loại bằng chứng khởi tạo, lập kế hoạch, baseline, execution và closure.
+- Bản ghi append-only, có lịch sử revision; baseline V1.0 được giữ bất biến.
+- Lưu PDF/ảnh/CSV/TXT (850 KB/tệp) trong Neon BYTEA, có SHA-256 và export chia nhiều phần để phù hợp giới hạn Vercel.
+- Xuất CSV theo từng loại, JSON, báo cáo HTML in PDF, checklist độ phủ và Gantt/effort chart SVG dựa trên dữ liệu thật.
+- Kiểm tra tự động mục còn thiếu theo 8 trang yêu cầu môn học; không gán trạng thái nghiệm thu giả.
+- Giữ nguyên nghiệp vụ KTX, không thêm email/cron, không dùng file system serverless.
+
 # V8 · UI & Data Visualization (2026-11-17)
 
 - Bổ sung các vòng tròn KPI sức chứa và tiến độ yêu cầu Một cửa; biểu đồ số hồ sơ và yêu cầu theo ngày trong 7 ngày; nhóm dịch vụ phổ biến.

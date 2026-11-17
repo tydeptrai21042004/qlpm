@@ -51,3 +51,22 @@ API responses use `error` for failures. Expected status codes are 200/201, 400, 
 ## V6 — KTX Khu A demo extensions
 
 See [`KTX_A_REFERENCE_AND_IMPLEMENTATION.md`](KTX_A_REFERENCE_AND_IMPLEMENTATION.md) for business rules and V7 changes. New routes: `GET /api/room-inspections` (authenticated; students see their own records, staff see all), `POST /api/room-inspections` (assigned students only). `POST /api/requests/:id/feedback` remains supported. All email notification routes from V6 have been removed; the existing `/api/notifications` system remains in-app only.
+
+## CO3011 Project Evidence Center (V9, staff-only)
+
+Every route below requires a valid staff session cookie. Evidence entries use an append-only Neon JSONB table, and binary attachments are stored in Neon BYTEA rather than Vercel ephemeral storage.
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/api/evidence/meta` | Fields and CO3011 evidence categories |
+| GET | `/api/evidence` | Recent 80 records, all category counts and file metadata |
+| GET | `/api/evidence/assessment` | Evidence-coverage checklist, not approval of authenticity |
+| POST | `/api/evidence` | Create a record or a historical revision (`supersedes_id`) |
+| POST | `/api/evidence/:id/file` | Binary file upload with `Content-Type` and percent-encoded `X-File-Name`, maximum 850 KB |
+| GET | `/api/evidence/files/:id` | Download original file with checksum validation |
+| GET | `/api/evidence/export/manifest` | Enumerate all ZIP parts needed to export the project evidence |
+| GET | `/api/evidence/export/records/:part` | 0-based record ZIP (40 per archive), with typed CSV, JSON, HTML and optional Gantt/effort SVG |
+| GET | `/api/evidence/export/files/:part` | 0-based attachment ZIP parts, with original file contents and manifest |
+| GET | `/api/evidence/report?page=0` | Human-readable, print-to-PDF report preview (40 records per page) |
+
+**Caveat:** A project-management report still requires human review and interpretation. The server never creates simulated consultations, fabricated test outcomes or fictional effort data.

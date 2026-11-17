@@ -1,8 +1,8 @@
 {
   "name": "co3011-campus-housing",
-  "version": "8.0.0",
+  "version": "9.0.0",
   "private": true,
-  "description": "KTX Khu A residence portal: occupancy visualizations, room status map, in-app services and responsive UI with Neon/PostgreSQL and Vercel",
+  "description": "Student dormitory management with persistent CO3011 evidence center and chunked Vercel ZIP exports (Neon/Express)",
   "type": "module",
   "engines": {
     "node": ">=22"
@@ -20,7 +20,9 @@
     "test:coverage": "node --experimental-test-coverage --test tests/*.test.js",
     "test:ui": "python scripts/visual-smoke.py",
     "test:ui:interactive": "python scripts/interactive-smoke.py",
-    "check": "node --check server.js && node --check backend/app.js && npm run test:unit && npm run test:inspections && npm run test:source"
+    "check": "node --check server.js && node --check backend/app.js && node --check backend/routes/evidence.js && node --check public/evidence.js && npm run test:unit && npm run test:inspections && npm run test:source && npm run test:evidence",
+    "test:evidence": "node --test tests/evidence.test.js tests/evidence-routes.test.js",
+    "test:ui:evidence": "python scripts/evidence-visual-smoke.py"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.0.0",
