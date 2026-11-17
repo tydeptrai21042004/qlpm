@@ -1,3 +1,5 @@
+> **V10 note:** For the opt-in CO3011 demonstration seed and the real/demo export split, see [VERCEL_V10_DEMO_SEED.md](VERCEL_V10_DEMO_SEED.md). Keep both seed flags disabled in production.
+
 # Deploy & acceptance checklist – V9 (Vercel + Neon)
 
 **Project:** CO3011 Student Dormitory Management System – simulated KTX Khu A, not an official KTX service.

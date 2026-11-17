@@ -51,3 +51,9 @@ Before submission, record a passing Neon integration run and a manual/demo run a
 - `npm run test:evidence`: 12 pure and route-level checks for the CO3011 schema, validation, append-only baseline, staff guard, binary upload/download SHA-256, ZIP parts and CSV/HTML escaping. These do not require a live Neon connection.
 - `npm run test:ui:evidence`: Chromium + synthetic API UI test (create/view/filter/export links, mobile 390px). Synthetic records are test fixtures only and are **not saved to production**.
 - Test real `/api/evidence` and Neon BYTEA on a disposable Neon branch after deployment; save real results as QA evidence. Neither mocked route tests nor simulated browser screenshots establish production readiness.
+
+## V10 demo seed verification
+
+- `npm run test:evidence` checks 74 demo examples across all 15 types, idempotency, authorization, real-only coverage/exports, baseline isolation and separate demo ZIP warnings.
+- `npm run test:ui:evidence` tests staff UI seed flow on a mocked browser page and mobile width, without writing production data.
+- A real Neon branch and Vercel deployment are still necessary for full integration acceptance.

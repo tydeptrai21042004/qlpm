@@ -1,6 +1,13 @@
-# KTX Khu A · Cổng quản lý nội trú (CO3011, bản mô phỏng V9)
+# KTX Khu A · Cổng quản lý nội trú (CO3011, bản mô phỏng V10)
 
 Ứng dụng full-stack **Node.js 22 + Express 5 + Neon PostgreSQL + HTML/CSS/JavaScript**, triển khai **Frontend + Backend trong một dự án Vercel**. Xây dựng theo bối cảnh quản lý phòng ở và dịch vụ sinh viên của Ký túc xá Khu A, ĐHQG TP.HCM. **Đây là hệ thống mô phỏng phục vụ đồ án, không phải cổng chính thức.**
+
+## V10 – Seed CO3011 đầy đủ biểu mẫu, không giả mạo bằng chứng
+
+- V9 chỉ tạo phòng mẫu (`SEED_SAMPLE_ROOMS`) nên bảng `pm_evidence` trống; V10 bổ sung **74 ví dụ DEMO thuộc 15 danh mục**.
+- Bật `ENABLE_DEMO_EVIDENCE_SEED=true` trên **Preview/test Neon branch**, redeploy, đăng nhập Staff → **Hồ sơ CO3011 → Seed dữ liệu DEMO**. Có thể dùng `SEED_SAMPLE_EVIDENCE=true` để tự nạp khi khởi động nếu đã có tài khoản staff cấu hình qua `ADMIN_EMAIL`/`ADMIN_PASSWORD`.
+- Bản ghi demo luôn hiển thị cảnh báo và **không tính độ phủ, checklist, actual effort, test pass hay Baseline V1.0**. Xuất demo sang ZIP riêng có tên `DEMO-NOT-FOR-SUBMISSION`; bản xuất chính thức chỉ chứa dữ liệu thật. Seed lại không tạo trùng.
+- Xem **[docs/VERCEL_V10_DEMO_SEED.md](docs/VERCEL_V10_DEMO_SEED.md)** để triển khai, test và dọn mẫu. Không bật seed trên production chứa dữ liệu thật.
 
 ## Tính năng
 

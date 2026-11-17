@@ -38,20 +38,25 @@ async def run():
       window.fetch=async (url,opt={})=>{
         const method=opt.method||'GET';
         if(url==='/api/evidence/assessment')return new Response(JSON.stringify(window.__assessment),{status:200,headers:{'content-type':'application/json'}});
-        if(url==='/api/evidence/meta')return new Response(JSON.stringify({types:window.__types,maxFileBytes:870400}),{status:200,headers:{'content-type':'application/json'}});
+        if(url==='/api/evidence/meta')return new Response(JSON.stringify({types:window.__types,maxFileBytes:870400,canSeedDemo:true}),{status:200,headers:{'content-type':'application/json'}});
         if(url==='/api/evidence'&&method==='GET'){
-          const counts=Object.fromEntries(Object.keys(window.__types).map(k=>[k,window.__records.filter(x=>x.kind===k).length]));
-          return new Response(JSON.stringify({records:[...window.__records].reverse(),counts,files:window.__files,total:window.__records.length}),{status:200,headers:{'content-type':'application/json'}});
+          const counts=Object.fromEntries(Object.keys(window.__types).map(k=>[k,window.__records.filter(x=>x.kind===k&&!x.is_demo).length]));
+          const demoCounts=Object.fromEntries(Object.keys(window.__types).map(k=>[k,window.__records.filter(x=>x.kind===k&&x.is_demo).length]));
+          return new Response(JSON.stringify({records:[...window.__records].reverse(),counts,demoCounts,files:window.__files,total:window.__records.length,realTotal:window.__records.filter(x=>!x.is_demo).length,demoTotal:window.__records.filter(x=>x.is_demo).length}),{status:200,headers:{'content-type':'application/json'}});
         }
         if(url==='/api/evidence'&&method==='POST'){
           const body=JSON.parse(opt.body);const next={...body,id:window.__records.length+1,author_name:'Staff',created_at:now};window.__records.push(next);
           return new Response(JSON.stringify({id:next.id,created_at:now}),{status:201,headers:{'content-type':'application/json'}});
         }
+        if(url==='/api/evidence/demo-seed'&&method==='POST'){
+          if(!window.__records.some(x=>x.is_demo))window.__records.push({id:90,kind:'product',title:'[DEMO] Mẫu PBS',is_demo:true,author_name:'Demo only',created_at:now,data:{product_id:'P01',description:'MẪU KHÔNG THẬT',quality:'Cần review'}});
+          return new Response(JSON.stringify({inserted:1,seeded_total:1}),{status:200,headers:{'content-type':'application/json'}});
+        }
         if(url.includes('/file')&&method==='POST'){
           window.__files.push({id:1,evidence_id:Number(url.split('/')[3]),original_name:'Evidence.pdf',byte_length:opt.body.size,sha256:'f'.repeat(64),created_at:now});
           return new Response(JSON.stringify({id:1}),{status:201,headers:{'content-type':'application/json'}});
         }
-        if(url==='/api/evidence/export/manifest')return new Response(JSON.stringify({total:window.__records.length,files:window.__files.length,parts:[{url:'/api/evidence/export/records/0',name:'records.zip',label:'Project records 1/1'}],missing:[]}),{status:200,headers:{'content-type':'application/json'}});
+        if(url==='/api/evidence/export/manifest')return new Response(JSON.stringify({total:window.__records.length,realTotal:window.__records.filter(x=>!x.is_demo).length,demoTotal:window.__records.filter(x=>x.is_demo).length,files:window.__files.length,parts:[{url:'/api/evidence/export/records/0',name:'records.zip',label:'Project records 1/1',scope:'real'}],missing:[]}),{status:200,headers:{'content-type':'application/json'}});
         return new Response(JSON.stringify(payload[url]||{}),{status:200,headers:{'content-type':'application/json'}});
       };
     }''',dict(payload=payload,initial=sample(),now=NOW))
@@ -71,7 +76,7 @@ async def run():
     assert await page.locator('.ev-cover-item').count()==15
     assert await page.locator('.ev-check').count()>=20
     assert '15' in await page.locator('.ev-header-count').inner_text()
-    await page.screenshot(path=str(ROOT/'preview_v9_evidence_desktop.png'),full_page=True)
+    await page.screenshot(path=str(ROOT/'preview_v10_evidence_desktop.png'),full_page=True)
     # Category filter
     await page.locator('#ev_filter').select_option('risk')
     assert await page.locator('.ev-record').count()==1
@@ -96,9 +101,18 @@ async def run():
     await page.locator('a.ev-download-link').first.wait_for(timeout=5000)
     assert await page.locator('a.ev-download-link').count()==1
     await page.locator('button.dialog-close').click()
+    # Explicitly seed a synthetic example: it must be distinguishable from genuine data.
+    await page.evaluate('window.confirm=()=>true')
+    await page.locator('button[data-action="ev-demo-seed"]').click()
+    await page.locator('.ev-record-demo').wait_for(timeout=5000)
+    assert await page.locator('.ev-demo-alert').count()>=1
+    await page.locator('.ev-record-demo').first.click()
+    assert 'KHÔNG PHẢI BẰNG CHỨNG THẬT' in await page.locator('.ev-demo-alert').last.inner_text()
+    await page.locator('button.dialog-close').click()
+    await page.screenshot(path=str(ROOT/'preview_v10_evidence_seeded_desktop.png'),full_page=True)
     await page.set_viewport_size({'width':390,'height':844})
     await page.wait_for_timeout(400)
-    await page.screenshot(path=str(ROOT/'preview_v9_evidence_mobile.png'),full_page=True)
+    await page.screenshot(path=str(ROOT/'preview_v10_evidence_mobile.png'),full_page=True)
     width=await page.evaluate('document.documentElement.scrollWidth')
     assert width<=390,('mobile horizontal overflow',width)
     assert not errors,errors

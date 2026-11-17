@@ -1,3 +1,5 @@
+> **V10 update:** This document covers V9 behavior. V10 adds staff-only demo seeding with 74 **non-submittable** examples. Official records ZIPs and completeness checks exclude all demos; sample ZIPs are labelled `DEMO-NOT-FOR-SUBMISSION`. See [VERCEL_V10_DEMO_SEED.md](VERCEL_V10_DEMO_SEED.md).
+
 # CO3011 – Evidence Center and Vercel export (V9)
 
 ## What the implementation does

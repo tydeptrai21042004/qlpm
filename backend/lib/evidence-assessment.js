@@ -1,8 +1,10 @@
 // A checklist of RECORDED artifacts, never a grading engine or an acceptance certificate.
 // Data may be truthful, incomplete, or not yet verified by a human reviewer.
 export function assessEvidence(allRecords){
-  const superseded=new Set(allRecords.map(r=>Number(r.supersedes_id)).filter(Boolean));
-  const rows=allRecords.filter(r=>!superseded.has(Number(r.id)));
+  // Demonstration seeds never count as project evidence or grading coverage.
+  const real=allRecords.filter(r=>!r.is_demo);
+  const superseded=new Set(real.map(r=>Number(r.supersedes_id)).filter(Boolean));
+  const rows=real.filter(r=>!superseded.has(Number(r.id)));
   const of=kind=>rows.filter(r=>r.kind===kind);
   const types=kind=>new Set(of(kind).map(r=>r.data?.[kind==='artifact'?'artifact_type':'topic']).filter(Boolean));
   const artifacts=types('artifact'),topics=types('initiation'),closure=types('closure');
@@ -37,5 +39,5 @@ export function assessEvidence(allRecords){
   add('Mandatory','Traceability Matrix',of('traceability').length>0,'Objective → Product → Activity → Resource → Risk → Test → Checkpoint.');
   add('AI declaration','AI tool usage',of('ai_usage').length>0,'Khai báo công cụ AI đã dùng và cách nhóm thẩm định output.');
   return {checks,total:checks.length,recorded:checks.filter(c=>c.status==='recorded').length,missing:checks.filter(c=>c.status==='missing').length,conditional:checks.filter(c=>c.status==='conditional').length,
-    note:'This is a record-presence checklist, not a verification of truthfulness or lecturer approval.'};
+    note:'Only manually entered (non-demo) records count. Record presence is not verification of truthfulness, quality or lecturer approval.'};
 }

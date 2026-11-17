@@ -1,3 +1,11 @@
+# V10 – CO3011 demo evidence seeding (2026-11-17)
+
+- Add 74 schema-valid illustrative templates across all 15 evidence categories. All are marked DEMO and explicitly unverified, with no fabricated client approval/test success.
+- Staff-only opt-in seed endpoint and UI button, plus optional `SEED_SAMPLE_EVIDENCE=true` automatic bootstrap on an isolated Neon branch. Idempotent unique demo keys.
+- Show separate real/demo counts. Real-only checklist, baseline uniqueness, efforts, exports and attachments; additional DEMO-NOT-FOR-SUBMISSION ZIPs.
+- Test seed authorization, idempotence, demo exclusion, ZIP warning and responsive browser UI.
+- See `docs/VERCEL_V10_DEMO_SEED.md`.
+
 # V9 · CO3011 Evidence & Export (2026-11-17)
 
 - Bổ sung Evidence Center riêng cho nhân viên, gồm 15 loại bằng chứng khởi tạo, lập kế hoạch, baseline, execution và closure.

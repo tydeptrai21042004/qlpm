@@ -1,8 +1,8 @@
 {
   "name": "co3011-campus-housing",
-  "version": "9.0.0",
+  "version": "10.0.0",
   "private": true,
-  "description": "Student dormitory management with persistent CO3011 evidence center and chunked Vercel ZIP exports (Neon/Express)",
+  "description": "Student dormitory management with staff-only CO3011 demo templates, genuine evidence separation and Vercel ZIP exports (Neon/Express)",
   "type": "module",
   "engines": {
     "node": ">=22"

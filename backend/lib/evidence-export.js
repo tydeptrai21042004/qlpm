@@ -93,18 +93,18 @@ export function effortTrendSvg(records){
   <text x="${left}" y="${h-20}" font-size="12" fill="#739185">${escapeHtml(values[0].week)}</text><text x="${left+plotW}" y="${h-20}" text-anchor="end" font-size="12" fill="#739185">${escapeHtml(values.at(-1).week)}</text>
   <rect x="590" y="15" width="16" height="8" rx="3" fill="#8cabbf"/><text x="614" y="23" font-size="11">Planned</text><rect x="705" y="15" width="16" height="8" rx="3" fill="#158168"/><text x="729" y="23" font-size="11">Actual</text></svg>`;
 }
-export function reportHTML({records,counts,generatedAt,part,totalParts,operations}){
+export function reportHTML({records,counts,generatedAt,part,totalParts,operations,isDemo=false}){
   const missing=getMissingKinds(counts);
   const gantt=ganttSvg(records),effort=effortTrendSvg(records);
   const byKind=Object.entries(EVIDENCE_TYPES).map(([kind,spec])=>{
     const entries=records.filter(x=>x.kind===kind);
     const header=`<h2>${escapeHtml(spec.label)} <small>${escapeHtml(spec.task)}</small></h2>`;
     if(!entries.length)return `${header}<p class="muted">${counts[kind]?'Không có bản ghi trong phần ZIP này.':'Chưa có bằng chứng được nhập.'}</p>`;
-    return header+entries.map(e=>`<article><h3>#${e.id} – ${escapeHtml(e.title)}</h3><p class="muted">${escapeHtml(e.author_name||'—')} · ${escapeHtml(e.created_at)} · ${e.supersedes_id?`Sửa từ #${e.supersedes_id}`:'Bản ghi gốc'}</p><dl>${spec.fields.map(f=>e.data?.[f.key]!==undefined?`<dt>${escapeHtml(f.label)}</dt><dd>${escapeHtml(e.data[f.key])}</dd>`:'').join('')}</dl></article>`).join('');
+    return header+entries.map(e=>`<article>${e.is_demo?'<p class="warning"><strong>DEMO – KHÔNG PHẢI BẰNG CHỨNG THẬT</strong></p>':''}<h3>#${e.id} – ${escapeHtml(e.title)}</h3><p class="muted">${escapeHtml(e.author_name||'—')} · ${escapeHtml(e.created_at)} · ${e.supersedes_id?`Sửa từ #${e.supersedes_id}`:'Bản ghi gốc'}</p><dl>${spec.fields.map(f=>e.data?.[f.key]!==undefined?`<dt>${escapeHtml(f.label)}</dt><dd>${escapeHtml(e.data[f.key])}</dd>`:'').join('')}</dl></article>`).join('');
   }).join('');
   return `<!doctype html><html lang="vi"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>CO3011 – Project Evidence – Part ${part+1}</title>
 <style>*{box-sizing:border-box}body{font:14px/1.6 Arial,sans-serif;max-width:960px;margin:40px auto;color:#203d35;padding:0 24px}h1{font-size:28px;margin:0}h2{color:#11644d;margin:38px 0 10px;padding-bottom:10px;border-bottom:2px solid #c9e3d6}h2 small{color:#678479;font-size:12px;margin-left:8px}h3{font-size:16px;margin:0}.muted{color:#6d8179}.lead{background:#f0f8f3;padding:18px;border-left:4px solid #168364}table{border-collapse:collapse;width:100%;font-size:13px}th,td{border:1px solid #dce7df;padding:8px;text-align:left}article{margin:13px 0 20px;border:1px solid #e0e7e2;padding:15px;border-radius:8px;break-inside:avoid}dl{display:grid;grid-template-columns:190px 1fr;gap:7px 12px}dt{color:#608275;font-weight:bold}dd{margin:0;white-space:pre-wrap;overflow-wrap:anywhere}.warning{color:#984e20}@media print{body{margin:0;padding:0}h2{break-after:avoid}article{break-inside:avoid}a{color:inherit}}</style>
-<h1>CO3011 · Project Evidence Report</h1><p class="muted">Student Dormitory Management System · Export ${escapeHtml(generatedAt)} · Records part ${part+1}/${totalParts}</p>
+${isDemo?'<div style="border:3px solid #b25324;padding:16px;background:#fff2e9;color:#862b1b;font-weight:700">DEMO / DỮ LIỆU MINH HỌA – KHÔNG DÙNG ĐỂ NỘP. Không có client log, giờ công, test run hay baseline phê duyệt thật trong phần này.</div>':''}<h1>CO3011 · ${isDemo?'DEMO TEMPLATES – NOT FOR SUBMISSION':'Project Evidence Report'}</h1><p class="muted">Student Dormitory Management System · Export ${escapeHtml(generatedAt)} · Records part ${part+1}/${totalParts}</p>
 <p class="lead">Đây là bằng chứng nhóm đã nhập, KHÔNG phải báo cáo cuối kỳ được tự động xác nhận. Lịch sử chỉnh sửa được giữ bằng bản ghi mới; không có nhật ký hoặc kết quả kiểm thử giả.</p>
 <h2>Checklist evidence</h2><table><thead><tr><th>Milestone / category</th><th>Stored entries (all parts)</th></tr></thead><tbody>${Object.entries(EVIDENCE_TYPES).map(([k,v])=>`<tr><td>${escapeHtml(v.milestone)} – ${escapeHtml(v.label)}</td><td>${Number(counts[k]||0)}</td></tr>`).join('')}</tbody></table>
 ${missing.length?`<p class="warning"><strong>Missing sections:</strong> ${missing.map(v=>escapeHtml(v.label)).join('; ')}.</p>`:'<p>All categories have at least one entry. Check quality and completeness manually.</p>'}
@@ -112,18 +112,19 @@ ${missing.length?`<p class="warning"><strong>Missing sections:</strong> ${missin
 <table><tbody>${Object.entries(operations||{}).map(([key,val])=>`<tr><th>${escapeHtml(key)}</th><td>${escapeHtml(val)}</td></tr>`).join('')}</tbody></table>
 ${gantt?`<h2>Gantt · Activity records (this part)</h2>${gantt}`:''}${effort?`<h2>Weekly effort (this part)</h2>${effort}`:''}${byKind}<hr><p class="muted">Trước khi nộp: kiểm tra log client, xác nhận baseline, đủ số Product Descriptions, đối chiếu planned/actual, liên kết artefact thực và khai báo AI. Trong trình duyệt chọn Print → Save as PDF.</p></html>`;
 }
-export function recordsZip({records,counts,operations,assessment=null,part,totalParts,generatedAt}){
-  const files=[['README.txt',`CO3011 EVIDENCE EXPORT\nGenerated: ${generatedAt}\nPart: ${part+1}/${totalParts}\nScope: content entered in Project Evidence Center plus Neon operational counts.\nNo fabricated entries. Missing categories are reported in coverage.json.\nImage/PDF attachments are supplied in evidence-files-*.zip parts, if uploaded.\nPrint report.html to PDF in your browser; review and write final academic narrative separately.\nOriginal V1.0 and revisions are append-only.\n`],
-    ['evidence.json',JSON.stringify({generatedAt,part:part+1,totalParts,records},null,2)],
-    ['report.html',reportHTML({records,counts,operations,part,totalParts,generatedAt})],
-    ['coverage.json',JSON.stringify({counts,missing:getMissingKinds(counts),operations,assessment},null,2)],
-    ['all-records.csv',csv(['id','kind','title','created_at','author','supersedes_id','data_json'],records.map(r=>[r.id,r.kind,r.title,r.created_at,r.author_name,r.supersedes_id||'',JSON.stringify(r.data)]))]];
+export function recordsZip({records,counts,demoCounts=null,operations,assessment=null,part,totalParts,generatedAt,isDemo=false}){
+  const warning='DEMO / DATA ONLY: These records are illustrative placeholders, not genuine client meetings, approved baselines, work logs, QA results or individual contributions. DO NOT SUBMIT AS EVIDENCE.';
+  const files=[['README.txt',`${isDemo?warning+'\n\n':'CO3011 VERIFIED-SOURCE RECORD EXPORT (entries still require human review)\n'}Generated: ${generatedAt}\nPart: ${part+1}/${totalParts}\nScope: ${isDemo?'DEMONSTRATION EXAMPLES ONLY':'Manually entered CO3011 records, NOT demo seeds'}.\nDemo seeds DO NOT count in coverage.json or the assignment checklist.\nMissing categories are reported from NON-DEMO records only.\nPrint report.html to PDF only after checking the entries.\nImage/PDF attachments, if uploaded, are in evidence-files-*.zip.\n`],
+    ['evidence.json',JSON.stringify({generatedAt,part:part+1,totalParts,scope:isDemo?'demo_not_for_submission':'real_requires_verification',demo_only:isDemo,records},null,2)],
+    ['report.html',reportHTML({records,counts,operations,part,totalParts,generatedAt,isDemo})],
+    ['coverage.json',JSON.stringify({scope:isDemo?'demo_not_for_submission':'real_requires_verification',warning:isDemo?warning:'Record presence does not prove lecturer acceptance.',counts,demoCounts,missing:getMissingKinds(counts),operations,assessment},null,2)],
+    ['all-records.csv',csv(['id','kind','title','is_demo','created_at','author','supersedes_id','data_json'],records.map(r=>[r.id,r.kind,r.title,Boolean(r.is_demo),r.created_at,r.author_name,r.supersedes_id||'',JSON.stringify(r.data)]))]];
   const gantt=ganttSvg(records),effort=effortTrendSvg(records);
   if(gantt)files.push(['charts/gantt.svg',gantt]);
   if(effort)files.push(['charts/weekly-effort.svg',effort]);
   for(const [kind,spec] of Object.entries(EVIDENCE_TYPES)){
     const related=records.filter(r=>r.kind===kind);
-    files.push([`csv/${kind}.csv`,csv(['id','title','created_at','author','supersedes_id',...spec.fields.map(f=>f.key)],related.map(r=>[r.id,r.title,r.created_at,r.author_name,r.supersedes_id||'',...spec.fields.map(f=>r.data?.[f.key]??'')]))]);
+    files.push([`csv/${kind}.csv`,csv(['id','title','is_demo','created_at','author','supersedes_id',...spec.fields.map(f=>f.key)],related.map(r=>[r.id,r.title,Boolean(r.is_demo),r.created_at,r.author_name,r.supersedes_id||'',...spec.fields.map(f=>r.data?.[f.key]??'')]))]);
   }
   const manifest=files.map(([name,body])=>({name,sha256:digest(Buffer.from(body))}));
   files.push(['file-manifest.json',JSON.stringify(manifest,null,2)]);

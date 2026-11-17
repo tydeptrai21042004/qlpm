@@ -9,18 +9,25 @@ function fixture(){
   const app={get:(path,fn)=>handlers.set('GET '+path,fn),post:(path,fn)=>handlers.set('POST '+path,fn)};
   const query=async(sql,p=[])=>{
     const s=sql.replace(/\s+/g,' ').trim();
-    if(s.startsWith('SELECT COUNT(*)::int AS total FROM pm_evidence'))return [{total:rows.length}];
-    if(s.startsWith('SELECT kind,COUNT(*)::int AS total'))return Object.entries(Object.groupBy(rows,r=>r.kind)).map(([kind,rs])=>({kind,total:rs.length}));
-    if(s.startsWith('SELECT id,kind,data,supersedes_id FROM pm_evidence'))return rows;
-    if(s.startsWith('SELECT e.id,e.kind,e.title'))return s.includes('DESC')?[...rows].reverse():rows.slice(p[1],p[1]+p[0]);
+    if(s.startsWith('SELECT COUNT(*)::int AS total FROM pm_evidence'))return [{total:rows.filter(r=>Boolean(r.is_demo)===Boolean(p[0])).length}];
+    if(s.startsWith('SELECT kind,is_demo,COUNT(*)::int AS total'))return Object.entries(Object.groupBy(rows,r=>`${r.kind}::${Boolean(r.is_demo)}`)).map(([key,rs])=>({kind:rs[0].kind,is_demo:Boolean(rs[0].is_demo),total:rs.length}));
+    if(s.startsWith('SELECT id,kind,data,supersedes_id,is_demo FROM pm_evidence'))return rows;
+    if(s.startsWith('SELECT e.id,e.kind,e.title'))return s.includes('DESC')?[...rows].reverse().slice(0,100):rows.filter(r=>Boolean(r.is_demo)===Boolean(p[0])).slice(p[2],p[2]+p[1]);
     if(s.startsWith('SELECT f.id,f.evidence_id'))return files.map(f=>({...f,author_name:'Staff'}));
     if(s.startsWith('SELECT (SELECT COUNT(*)'))return [{rooms:4,occupied_assignments:2,applications:2,requests:1,room_inspections:0,operational_audit_events:2}];
+    if(s.startsWith('INSERT INTO pm_evidence (kind,title,data,created_by,is_demo,demo_seed_key)')){
+      const payload=JSON.parse(p[0]),added=[];
+      for(const row of payload){if(rows.some(r=>r.demo_seed_key===row.seed_key))continue;
+        const record={...row,demo_seed_key:row.seed_key,id:rows.length+1,is_demo:true,created_at:'2026-11-17T08:00:00Z',author_name:'Staff'};
+        rows.push(record);added.push({id:record.id});}
+      return added;
+    }
     if(s.startsWith('INSERT INTO pm_evidence(')){
-      const r={id:rows.length+1,kind:p[0],title:p[1],data:JSON.parse(p[2]),created_by:p[3],supersedes_id:p[4],created_at:'2026-11-17T08:00:00Z',author_name:'Staff'};
+      const r={id:rows.length+1,kind:p[0],title:p[1],data:JSON.parse(p[2]),created_by:p[3],supersedes_id:p[4],is_demo:false,created_at:'2026-11-17T08:00:00Z',author_name:'Staff'};
       rows.push(r);return [{id:r.id,created_at:r.created_at}];
     }
-    if(s.startsWith('SELECT id,kind FROM pm_evidence'))return rows.filter(r=>r.id===p[0]).map(r=>({id:r.id,kind:r.kind}));
-    if(s.startsWith('SELECT id FROM pm_evidence WHERE id='))return rows.filter(r=>r.id===p[0]).map(r=>({id:r.id}));
+    if(s.startsWith('SELECT id,kind,is_demo FROM pm_evidence'))return rows.filter(r=>r.id===p[0]).map(r=>({id:r.id,kind:r.kind,is_demo:Boolean(r.is_demo)}));
+    if(s.startsWith('SELECT id,is_demo FROM pm_evidence WHERE id='))return rows.filter(r=>r.id===p[0]).map(r=>({id:r.id,is_demo:Boolean(r.is_demo)}));
     if(s.startsWith('INSERT INTO pm_evidence_files(')){
       const r={id:files.length+1,evidence_id:p[0],uploaded_by:p[1],original_name:p[2],mime_type:p[3],byte_length:p[4],sha256:p[5],created_at:'2026-11-17T08:01:00Z',base64:p[6]};
       files.push(r);return [{id:r.id}];
@@ -97,4 +104,65 @@ test('binary attachment goes into DB, downloads with checksum, and appears in se
   const part=await invoke('GET','/api/evidence/export/files/:part',{params:{part:'0'}});
   assert.ok(getNames(part.payload).some(x=>x.endsWith('.pdf')));
   assert.ok(getNames(part.payload).includes('files-index.csv'));
+});
+function readZipEntry(zip,name){
+  let offset=0;
+  while(offset+30<=zip.length&&zip.readUInt32LE(offset)===0x04034b50){
+    const label=zip.readUInt16LE(offset+26),extra=zip.readUInt16LE(offset+28),length=zip.readUInt32LE(offset+18);
+    const current=zip.subarray(offset+30,offset+30+label).toString('utf8');
+    const body=zip.subarray(offset+30+label+extra,offset+30+label+extra+length);
+    if(current===name)return inflateRawSync(body).toString('utf8');
+    offset+=30+label+extra+length;
+  }
+  throw Error('ZIP entry not found: '+name);
+}
+test('demo seed fills 15 sample categories idempotently without creating genuine evidence or fake coverage',async()=>{
+  const old=process.env.ENABLE_DEMO_EVIDENCE_SEED;
+  process.env.ENABLE_DEMO_EVIDENCE_SEED='true';
+  try {
+    const {invoke,rows}=fixture();
+    await assert.rejects(()=>invoke('POST','/api/evidence/demo-seed',{user:null}),{status:401});
+    await assert.rejects(()=>invoke('POST','/api/evidence/demo-seed',{user:{id:2,role:'student'}}),{status:403});
+    const seeded=(await invoke('POST','/api/evidence/demo-seed')).payload;
+    assert.equal(seeded.inserted,74);
+    assert.equal(seeded.seeded_total,74);
+    assert.equal((await invoke('POST','/api/evidence/demo-seed')).payload.inserted,0);
+    assert.equal(rows.length,74);
+    assert.ok(rows.every(r=>r.is_demo&&r.title.includes('[DEMO]')));
+    const list=(await invoke('GET','/api/evidence')).payload;
+    assert.equal(list.realTotal,0);
+    assert.equal(list.demoTotal,74);
+    assert.deepEqual(Object.keys(list.demoCounts).length,15);
+    assert.ok(Object.values(list.demoCounts).every(v=>v>0));
+    assert.ok(Object.values(list.counts).every(v=>v===0));
+    const check=(await invoke('GET','/api/evidence/assessment')).payload;
+    assert.equal(check.recorded,0);
+    assert.equal(check.checks.find(x=>x.task==='2.12'&&x.label.includes('V1.0')).status,'missing');
+    const manifest=(await invoke('GET','/api/evidence/export/manifest')).payload;
+    assert.equal(manifest.parts.filter(p=>p.scope==='real').length,1);
+    assert.equal(manifest.parts.filter(p=>p.scope==='demo').length,2);
+    assert.equal(manifest.missing.length,15);
+    const real=(await invoke('GET','/api/evidence/export/records/:part',{params:{part:'0'}})).payload;
+    const realJson=JSON.parse(readZipEntry(real,'evidence.json'));
+    assert.equal(realJson.records.length,0);
+    const demo=(await invoke('GET','/api/evidence/export/demo/:part',{params:{part:'0'}})).payload;
+    const demoJson=JSON.parse(readZipEntry(demo,'evidence.json'));
+    assert.equal(demoJson.records.length,40);
+    assert.equal(demoJson.demo_only,true);
+    assert.match(readZipEntry(demo,'README.txt'),/DO NOT SUBMIT AS EVIDENCE/);
+    assert.match(readZipEntry(demo,'report.html'),/KHÔNG DÙNG ĐỂ NỘP/);
+    assert.deepEqual(Object.values(JSON.parse(readZipEntry(demo,'coverage.json')).counts).filter(Boolean),[]);
+    await assert.rejects(()=>invoke('POST','/api/evidence',{body:{...weekly,supersedes_id:1}}),{status:409});
+    const pdf=Buffer.from('%PDF-1.4\nmock evidence\n');
+    await assert.rejects(()=>invoke('POST','/api/evidence/:id/file',{
+      params:{id:'1'},body:pdf,headers:{'content-type':'application/pdf','x-file-name':'sample.pdf'}}),{status:409});
+    await invoke('POST','/api/evidence',{body:weekly});
+    const realAfter=(await invoke('GET','/api/evidence')).payload;
+    assert.equal(realAfter.realTotal,1);
+    assert.equal(realAfter.counts.weekly_log,1);
+    assert.equal(realAfter.demoTotal,74);
+  } finally {
+    if(old===undefined)delete process.env.ENABLE_DEMO_EVIDENCE_SEED;
+    else process.env.ENABLE_DEMO_EVIDENCE_SEED=old;
+  }
 });

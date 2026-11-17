@@ -2,6 +2,8 @@ import {createHash} from 'node:crypto';
 import {requireUser,fail,safeId} from '../lib/validation.js';
 import {EVIDENCE_TYPES,validateEvidence} from '../lib/evidence-spec.js';
 import {assessEvidence} from '../lib/evidence-assessment.js';
+import {seedDemoEvidence} from '../lib/evidence-seed.js';
+import {DEMO_NOTICE} from '../lib/evidence-demo.js';
 import {groupAttachmentParts,recordsZip,reportHTML,safeFilename,zipArchive,digest,csv} from '../lib/evidence-export.js';
 
 const PAGE_SIZE=40;
@@ -20,11 +22,17 @@ function fileName(raw){
   return name;
 }
 async function getCounts(query){
-  const rows=await query('SELECT kind,COUNT(*)::int AS total FROM pm_evidence GROUP BY kind');
+  const rows=await query('SELECT kind,is_demo,COUNT(*)::int AS total FROM pm_evidence GROUP BY kind,is_demo');
   const counts=Object.fromEntries(Object.keys(EVIDENCE_TYPES).map(k=>[k,0]));
-  for(const r of rows)if(r.kind in counts)counts[r.kind]=Number(r.total);
-  return counts;
+  const demoCounts={...counts};
+  for(const r of rows){
+    const target=r.is_demo?demoCounts:counts;
+    if(r.kind in target)target[r.kind]=Number(r.total);
+  }
+  return {counts,demoCounts};
 }
+const recordCount=async(query,isDemo)=>normalizeTotal(await query(
+  'SELECT COUNT(*)::int AS total FROM pm_evidence WHERE is_demo=$1',[isDemo]));
 async function getOperations(query){
   // Only aggregate operational counts; never export resident names, emails or password hashes.
   const rows=await query(`SELECT
@@ -42,13 +50,13 @@ async function getFileMetadata(query){
     LEFT JOIN users u ON u.id=f.uploaded_by ORDER BY f.id`);
 }
 async function getAssessment(query){
-  const data=await query('SELECT id,kind,data,supersedes_id FROM pm_evidence ORDER BY id');
+  const data=await query('SELECT id,kind,data,supersedes_id,is_demo FROM pm_evidence ORDER BY id');
   return assessEvidence(data);
 }
-async function getAllRecords(query,offset=0,limit=PAGE_SIZE){
-  return query(`SELECT e.id,e.kind,e.title,e.data,e.supersedes_id,e.created_at,e.occurred_on,
+async function getAllRecords(query,offset=0,limit=PAGE_SIZE,isDemo=false){
+  return query(`SELECT e.id,e.kind,e.title,e.data,e.supersedes_id,e.created_at,e.occurred_on,e.is_demo,
     COALESCE(u.name,'—') AS author_name FROM pm_evidence e
-    LEFT JOIN users u ON u.id=e.created_by ORDER BY e.id ASC LIMIT $1 OFFSET $2`,[limit,offset]);
+    LEFT JOIN users u ON u.id=e.created_by WHERE e.is_demo=$1 ORDER BY e.id ASC LIMIT $2 OFFSET $3`,[isDemo,limit,offset]);
 }
 async function attachZipContent(query,metadata){
   const files=[];
@@ -72,15 +80,24 @@ export function registerEvidenceRoutes(app,{query,audit}){
   // Endpoint access is limited to staff. Student accounts may not list/export PM evidence.
   app.get('/api/evidence/meta',(req,res)=>{
     requireUser(req,'staff');
-    jsonNoCache(res).json({types:EVIDENCE_TYPES,maxFileBytes:FILE_MAX});
+    jsonNoCache(res).json({types:EVIDENCE_TYPES,maxFileBytes:FILE_MAX,canSeedDemo:process.env.ENABLE_DEMO_EVIDENCE_SEED==='true'||process.env.SEED_SAMPLE_EVIDENCE==='true',demoNotice:DEMO_NOTICE});
   });
   app.get('/api/evidence',async(req,res)=>{
     requireUser(req,'staff');
-    const total=normalizeTotal(await query('SELECT COUNT(*)::int AS total FROM pm_evidence'));
-    const rows=await query(`SELECT e.id,e.kind,e.title,e.data,e.supersedes_id,e.created_at,e.occurred_on,
+    const [realTotal,demoTotal,{counts,demoCounts}]=await Promise.all([
+      recordCount(query,false),recordCount(query,true),getCounts(query)]);
+    const rows=await query(`SELECT e.id,e.kind,e.title,e.data,e.supersedes_id,e.created_at,e.occurred_on,e.is_demo,
       COALESCE(u.name,'—') AS author_name FROM pm_evidence e
-      LEFT JOIN users u ON u.id=e.created_by ORDER BY e.id DESC LIMIT 80`);
-    jsonNoCache(res).json({records:rows,total,counts:await getCounts(query),files:await getFileMetadata(query)});
+      LEFT JOIN users u ON u.id=e.created_by ORDER BY e.id DESC LIMIT 100`);
+    jsonNoCache(res).json({records:rows,total:realTotal+demoTotal,realTotal,demoTotal,counts,demoCounts,files:await getFileMetadata(query)});
+  });
+  app.post('/api/evidence/demo-seed',async(req,res)=>{
+    const user=requireUser(req,'staff');
+    if(process.env.ENABLE_DEMO_EVIDENCE_SEED!=='true'&&process.env.SEED_SAMPLE_EVIDENCE!=='true')
+      fail(403,'Demo seeding is disabled. Set ENABLE_DEMO_EVIDENCE_SEED=true in Vercel and redeploy.');
+    const result=await seedDemoEvidence(query,Number(user.id));
+    if(result.inserted)await audit(user.id,'evidence_demo_seeded','pm_evidence',0,`Created ${result.inserted} illustrative records`);
+    jsonNoCache(res).json({...result,demo_only:true,warning:DEMO_NOTICE});
   });
   app.get('/api/evidence/assessment',async(req,res)=>{
     requireUser(req,'staff');
@@ -90,7 +107,8 @@ export function registerEvidenceRoutes(app,{query,audit}){
     const user=requireUser(req,'staff');
     const item=validateEvidence(req.body);
     if(item.supersedes_id){
-      const original=await query('SELECT id,kind FROM pm_evidence WHERE id=$1',[item.supersedes_id]);
+      const original=await query('SELECT id,kind,is_demo FROM pm_evidence WHERE id=$1',[item.supersedes_id]);
+      if(original[0]?.is_demo)fail(409,'Demo templates cannot be revised into genuine evidence. Create a new real record.');
       if(!original.length||original[0].kind!==item.kind)fail(400,'Revision must reference an existing record of the same type.');
       if(item.kind==='baseline')fail(409,'Baseline records are immutable. Add a NEW version instead (for example V2.0).');
     }
@@ -120,8 +138,9 @@ export function registerEvidenceRoutes(app,{query,audit}){
       ||(mime==='application/pdf'&&body.subarray(0,5).toString()==='%PDF-')
       ||(mime==='text/plain'||mime==='text/csv');
     if(!validSignature)fail(400,'File content does not match its MIME type.');
-    const found=await query('SELECT id FROM pm_evidence WHERE id=$1',[recordId]);
+    const found=await query('SELECT id,is_demo FROM pm_evidence WHERE id=$1',[recordId]);
     if(!found.length)fail(404,'Evidence record not found.');
+    if(found[0].is_demo)fail(409,'Demo templates cannot have evidence attachments. Create a real record first.');
     const sha256=createHash('sha256').update(body).digest('hex');
     const rows=await query(`INSERT INTO pm_evidence_files(evidence_id,uploaded_by,original_name,mime_type,byte_length,sha256,content)
       VALUES($1,$2,$3,$4,$5,$6,decode($7,'base64')) RETURNING id`,
@@ -143,27 +162,34 @@ export function registerEvidenceRoutes(app,{query,audit}){
   });
   app.get('/api/evidence/export/manifest',async(req,res)=>{
     requireUser(req,'staff');
-    const total=normalizeTotal(await query('SELECT COUNT(*)::int AS total FROM pm_evidence'));
-    const files=await getFileMetadata(query);
+    const [realTotal,demoTotal,files,{counts,demoCounts}]=await Promise.all([
+      recordCount(query,false),recordCount(query,true),getFileMetadata(query),getCounts(query)]);
     const fileParts=groupAttachmentParts(files);
-    const counts=await getCounts(query);
-    const recordsParts=Math.max(1,Math.ceil(total/PAGE_SIZE));
-    const parts=[...Array.from({length:recordsParts},(_,i)=>({
-      label:`Project records ${i+1}/${recordsParts}`,name:`co3011-evidence-records-${i+1}.zip`,url:`/api/evidence/export/records/${i}`})),
-      ...fileParts.map((_,i)=>({label:`Attached files ${i+1}/${fileParts.length}`,name:`co3011-evidence-files-${i+1}.zip`,url:`/api/evidence/export/files/${i}`}))];
-    jsonNoCache(res).json({total,files:files.length,counts,parts,assessment:await getAssessment(query),missing:Object.entries(EVIDENCE_TYPES).filter(([k])=>!counts[k]).map(([kind,v])=>({kind,label:v.label}))});
+    const realParts=Math.max(1,Math.ceil(realTotal/PAGE_SIZE));
+    const demoParts=Math.ceil(demoTotal/PAGE_SIZE);
+    const parts=[...Array.from({length:realParts},(_,i)=>({
+      label:`Bằng chứng THẬT ${i+1}/${realParts}`,name:`co3011-evidence-records-${i+1}.zip`,url:`/api/evidence/export/records/${i}`,scope:'real'})),
+      ...fileParts.map((_,i)=>({label:`Tệp đính kèm thật ${i+1}/${fileParts.length}`,name:`co3011-evidence-files-${i+1}.zip`,url:`/api/evidence/export/files/${i}`,scope:'real'})),
+      ...Array.from({length:demoParts},(_,i)=>({
+        label:`MẪU DEMO (không nộp) ${i+1}/${demoParts}`,name:`co3011-DEMO-NOT-FOR-SUBMISSION-${i+1}.zip`,url:`/api/evidence/export/demo/${i}`,scope:'demo'}))];
+    jsonNoCache(res).json({total:realTotal+demoTotal,realTotal,demoTotal,files:files.length,counts,demoCounts,
+      parts,demoWarning:demoTotal?DEMO_NOTICE:null,assessment:await getAssessment(query),
+      missing:Object.entries(EVIDENCE_TYPES).filter(([k])=>!counts[k]).map(([kind,v])=>({kind,label:v.label}))});
   });
-  app.get('/api/evidence/export/records/:part',async(req,res)=>{
+  async function recordsArchive(req,res,isDemo){
     requireUser(req,'staff');
     const part=Number(req.params.part);
-    const total=normalizeTotal(await query('SELECT COUNT(*)::int AS total FROM pm_evidence'));
-    const totalParts=Math.max(1,Math.ceil(total/PAGE_SIZE));
+    const total=await recordCount(query,isDemo);
+    const totalParts=isDemo?Math.ceil(total/PAGE_SIZE):Math.max(1,Math.ceil(total/PAGE_SIZE));
     if(!Number.isSafeInteger(part)||part<0||part>=totalParts)fail(404,'Unknown export part.');
-    const [records,counts,operations,assessment]=await Promise.all([getAllRecords(query,part*PAGE_SIZE),getCounts(query),getOperations(query),getAssessment(query)]);
-    const generatedAt=new Date().toISOString();
-    const zip=recordsZip({records,counts,operations,assessment,part,totalParts,generatedAt});
-    sendZip(res,`co3011-evidence-records-${part+1}.zip`,zip);
-  });
+    const [records,{counts,demoCounts},operations,assessment]=await Promise.all([
+      getAllRecords(query,part*PAGE_SIZE,PAGE_SIZE,isDemo),getCounts(query),getOperations(query),getAssessment(query)]);
+    const zip=recordsZip({records,counts,demoCounts,operations,assessment,part,totalParts,
+      generatedAt:new Date().toISOString(),isDemo});
+    sendZip(res,isDemo?`co3011-DEMO-NOT-FOR-SUBMISSION-${part+1}.zip`:`co3011-evidence-records-${part+1}.zip`,zip);
+  }
+  app.get('/api/evidence/export/records/:part',async(req,res)=>recordsArchive(req,res,false));
+  app.get('/api/evidence/export/demo/:part',async(req,res)=>recordsArchive(req,res,true));
   app.get('/api/evidence/export/files/:part',async(req,res)=>{
     requireUser(req,'staff');
     const part=Number(req.params.part);
@@ -174,12 +200,12 @@ export function registerEvidenceRoutes(app,{query,audit}){
   });
   app.get('/api/evidence/report',async(req,res)=>{
     requireUser(req,'staff');
-    const total=normalizeTotal(await query('SELECT COUNT(*)::int AS total FROM pm_evidence'));
+    const total=await recordCount(query,false);
     const page=Number(req.query.page||0);
     const totalParts=Math.max(1,Math.ceil(total/PAGE_SIZE));
     if(!Number.isSafeInteger(page)||page<0||page>=totalParts)fail(404,'Invalid report page.');
     const records=await getAllRecords(query,page*PAGE_SIZE,PAGE_SIZE);
-    const [counts,operations]=await Promise.all([getCounts(query),getOperations(query)]);
+    const [{counts},operations]=await Promise.all([getCounts(query),getOperations(query)]);
     res.set('Content-Security-Policy',"default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'");
     res.set('Cache-Control','private, no-store');
     res.type('html').send(reportHTML({records,counts,operations,part:page,totalParts,generatedAt:new Date().toISOString()}));
