@@ -13,6 +13,7 @@ import { registerHousingRoutes } from './routes/housing.js';
 import { registerRequestsRoutes } from './routes/requests.js';
 import { registerNotificationsRoutes } from './routes/notifications.js';
 import { registerAuditRoutes } from './routes/audit.js';
+import { registerRoomInspectionsRoutes } from './routes/room-inspections.js';
 import { ApiError } from './lib/validation.js';
 
 const PUBLIC = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'public');
@@ -80,6 +81,7 @@ export function createApp(adapter = neonAdapter) {
   registerRequestsRoutes(app, context);
   registerNotificationsRoutes(app, context);
   registerAuditRoutes(app, context);
+  registerRoomInspectionsRoutes(app, context);
 
   app.use('/api', (_req, res) => res.status(404).json({ error:'API endpoint not found.' }));
   app.use(express.static(PUBLIC, { index:'index.html', dotfiles:'deny' }));

@@ -46,3 +46,8 @@ All endpoints use same-origin `/api/...` and JSON. Mutating endpoints other than
 Status values: housing changes `pending`, `approved`, `rejected`, `cancelled` (kinds `transfer`, `checkout`); notices `published`, `archived` (audiences `all`, `building`); applications `pending`, `approved`, `rejected`, `closed` (`withdrawn=true` distinguishes self-withdrawal); service requests `open`, `in_progress`, `resolved`; priorities `low`, `normal`, `high`; categories `maintenance`, `cleaning`, `other`.
 
 API responses use `error` for failures. Expected status codes are 200/201, 400, 401, 403, 404, 409 and 429. Database queries are parameterized. Capacity reservation, allocation, room-transfer approval and move-out checkout use atomic PostgreSQL CTE statements. Audit and notification inserts run as best-effort secondary writes; they do not constitute an immutable audit ledger.
+
+
+## V6 — KTX Khu A demo extensions
+
+See [`KTX_A_REFERENCE_AND_IMPLEMENTATION.md`](KTX_A_REFERENCE_AND_IMPLEMENTATION.md) for business rules and V7 changes. New routes: `GET /api/room-inspections` (authenticated; students see their own records, staff see all), `POST /api/room-inspections` (assigned students only). `POST /api/requests/:id/feedback` remains supported. All email notification routes from V6 have been removed; the existing `/api/notifications` system remains in-app only.

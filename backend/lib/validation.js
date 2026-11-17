@@ -2,7 +2,7 @@ import { createHash, scryptSync, timingSafeEqual } from 'node:crypto';
 
 export const SESSION_SECONDS = 8 * 60 * 60;
 export const MAX_NOTES = 1000;
-export const CATEGORIES = ['maintenance', 'cleaning', 'other'];
+export const CATEGORIES = ['maintenance', 'cleaning', 'other', 'residence_certificate', 'resident_card', 'late_return', 'semester_payment', 'equipment_move', 'security'];
 export const PRIORITIES = ['low', 'normal', 'high'];
 export const REQUEST_STATES = ['open', 'in_progress', 'resolved'];
 export const has = (obj, key) => Object.prototype.hasOwnProperty.call(obj, key);

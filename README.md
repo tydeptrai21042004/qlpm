@@ -1,119 +1,101 @@
-# Campus Housing
+# KTX Khu A · Cổng quản lý nội trú (CO3011, bản mô phỏng V8)
 
-A student residence management application for CO3011 Software Project Management. The system contains a browser frontend, an Express API, and a Neon PostgreSQL database. **There is a real backend; it is not a static frontend or a localStorage demo.** Version 5 makes that backend visible and adds automated API, validation, and database tests.
+Ứng dụng full-stack **Node.js 22 + Express 5 + Neon PostgreSQL + HTML/CSS/JavaScript**, triển khai **Frontend + Backend trong một dự án Vercel**. Xây dựng theo bối cảnh quản lý phòng ở và dịch vụ sinh viên của Ký túc xá Khu A, ĐHQG TP.HCM. **Đây là hệ thống mô phỏng phục vụ đồ án, không phải cổng chính thức.**
 
-## Architecture
+## Tính năng
 
-```
-CO3011_Campus_Housing_Pro_V5/
-├── server.js                     Node/Vercel entrypoint (exports Express app)
-├── backend/
-│   ├── app.js                    App factory, security middleware, error handler
-│   ├── db/index.js               Neon driver, SQL schema and bootstrap
-│   ├── domain/policies.js        Request validation and business input rules
-│   ├── lib/context.js            Authentication session and side effects
-│   ├── lib/password.js           Scrypt password hashing
-│   ├── lib/validation.js         IDs, text, cookie and authorization rules
-│   └── routes/
-│       ├── auth.js               Sign-in, registration, profile, password
-│       ├── rooms.js              Rooms and resident rosters
-│       ├── people.js             Student/staff directories
-│       ├── applications.js       Dormitory applications and decisions
-│       ├── allocations.js        Room assignment and check-out history
-│       ├── housing.js            Room transfers and move-out requests
-│       ├── announcements.js      Staff notices and residence audience rules
-│       ├── requests.js           Maintenance requests and conversations
-│       ├── notifications.js      Inbox and read receipts
-│       └── audit.js              Staff activity history
-├── db/index.js                   Legacy compatibility re-export
-├── public/                       Browser frontend: HTML, CSS, JavaScript
-├── tests/
-│   ├── unit.test.js              Executable domain/validation tests
-│   ├── api.test.js               Real Express HTTP tests with fake SQL driver
-│   ├── integration.test.js       Real Neon end-to-end workflow (opt-in)
-│   ├── source.test.js            Source/structure consistency checks
-│   └── README.md                 Test prerequisites and limitations
-├── scripts/setup-db.js          Initialize schema and staff bootstrap
-├── scripts/visual-smoke.py      Browser smoke tests with synthetic data
-├── .github/workflows/ci.yml     Unit and mock API checks in GitHub Actions
-└── docs/                         API reference, scope, traceability, use cases
-```
+**Dành cho sinh viên**
 
-**Request path:** browser `fetch('/api/...')` → Express security middleware → session loaded from Neon → role/ownership checks → route handler → parameterized PostgreSQL query → JSON response. The frontend does not receive a database connection string.
+- Tạo tài khoản / đăng nhập bằng email và mật khẩu, chỉnh sửa tên và đổi mật khẩu. Email **chỉ là định danh đăng nhập**, hệ thống **không gửi thư**.
+- Đăng ký phòng, chọn nguyện vọng, xem hồ sơ xét duyệt; xem phòng được phân và yêu cầu chuyển/trả phòng.
+- Tra cứu phòng trống và **thống kê giường trống theo từng tòa tự động tính từ Neon**.
+- Gửi yêu cầu Một cửa (sửa chữa, vệ sinh, xác nhận nội trú, cấp lại thẻ, về trễ/ra sớm, an ninh, hỗ trợ phí học kỳ...), trao đổi với ban quản lý và đánh giá sau khi xử lý.
+- **Checklist chuẩn bị nhận phòng 7 bước**: tích chọn, lưu ngay trên trình duyệt của từng tài khoản; không cần nhập dữ liệu trên server. Checklist **không đồng bộ giữa các thiết bị**.
+- **Phiếu kiểm tra tình trạng phòng**: đánh dấu tình trạng khóa cửa, điện/đèn, quạt, đồ nội thất, nhà vệ sinh; ghi chú, lưu lịch sử trên Neon, xem và **in phiếu**. Chỉ sinh viên đang được phân phòng mới có thể tạo phiếu; mã phòng được xác định ở backend.
+- Xem bảng tin theo tòa, thông báo cá nhân **trong ứng dụng**, cẩm nang và các liên kết chính thức.
 
-## Current functions
+**Dành cho nhân viên**
 
-| Student | Residence staff |
-|---|---|
-| Register and sign in | Sign in as staff (bootstrapped from environment variables) |
-| View rooms and current capacity | Create, edit, activate/deactivate rooms, inspect resident roster |
-| Submit/withdraw accommodation application | Review pending applications and allocate rooms |
-| View own room assignment | Check out residents with history retained |
-| Submit room transfer or move-out request | Review transfer/move-out requests |
-| Open and reply to maintenance tickets | Assign, prioritize and resolve service tickets |
-| Read personal notifications and relevant notices | Publish and archive notices by building or whole residence |
-| Change profile name and password | View student directory, reports and audit log |
+- Xét duyệt hồ sơ, quản lý danh sách sinh viên/phòng, kiểm soát sức chứa, chuyển/trả phòng và lịch sử.
+- Phân công và xử lý yêu cầu Một cửa, phản hồi trao đổi, đăng/lưu trữ bảng tin theo tòa.
+- **Tra cứu phiếu kiểm tra phòng của sinh viên**, xem hạng mục có vấn đề, ghi chú, in phiếu và xuất CSV.
+- Tổng quan công suất theo tòa, thống kê hoạt động và nhật ký thao tác.
 
-**Important domain rules:** only one active accommodation application or allocation per student; capacity-checked approval; pending housing change limited to one per resident; no unauthorized student access to staff operations or other students' requests; resolution notes required when closing service requests. These are *proposed rules for the assignment*, not policies confirmed by the client.
+**Không có email notification**: V7/V8 đã gỡ Resend, hàng đợi email, API gửi email, cron và màn hình cấu hình email. Thông báo hồ sơ/yêu cầu vẫn được lưu trực tiếp trong `notifications` của Neon và xem tại **Thông báo**.
 
-## Local setup
+## Chạy trên máy
 
-Install Node.js 22+ and connect a **development Neon branch**. Do not commit secrets or use a production database for test data.
+Yêu cầu Node.js **22 trở lên** và tài khoản Neon/Postgres.
 
 ```bash
 cp .env.example .env.local
-# Fill in DATABASE_URL, ADMIN_EMAIL, ADMIN_PASSWORD
+# Mở .env.local, đặt DATABASE_URL và tài khoản admin của bạn
 npm install
 npm run db:setup
 npm run dev
 ```
 
-Visit http://localhost:3000. The initial staff account is created when its configured email does not yet exist. Subsequent redeployments do **not** reset its password.
+Truy cập **http://localhost:3000**. Chỉ bật `SEED_SAMPLE_ROOMS=true` trên **Neon branch test mới** để thêm 4 phòng ví dụ AG/AH; không bật seed đối với dữ liệu chính thức.
 
-### Backend verification
+## Vercel + Neon (một dự án)
 
-After starting the application, open:
+1. Đẩy thư mục source lên GitHub, không đưa `.env.local` hoặc các bí mật vào Git.
+2. Import repository vào Vercel, trỏ Root Directory tới thư mục có `server.js` và `package.json`.
+3. Đặt Environment Variables: `DATABASE_URL`, `ADMIN_EMAIL`, `ADMIN_PASSWORD` (ít nhất 12 ký tự, có chữ và số), tùy chọn `ADMIN_NAME` và `SEED_SAMPLE_ROOMS=false`.
+4. Deploy (Express server được export từ `server.js`). Truy cập `/api/ready` để kiểm tra database và tự tạo schema mới không phá dữ liệu cũ.
+5. Đăng nhập tài khoản quản trị, tạo phòng và thử toàn bộ quy trình trên Neon branch test trước khi dùng bản deploy.
 
-- `http://localhost:3000/api/health` — HTTP process alive, does not require the database
-- `http://localhost:3000/api/ready` — actually verifies Neon connectivity and schema initialization
-- `http://localhost:3000/api/me` — returns `{"user":null}` until logged in
+**Không cần** `RESEND_API_KEY`, `MAIL_FROM`, `CRON_SECRET`, `PUBLIC_APP_URL`, cron job hoặc nhà cung cấp email nào. Không có server background job.
 
-The complete endpoint reference is in [`docs/API_REFERENCE.md`](docs/API_REFERENCE.md).
-
-## Tests
-
-```bash
-npm run check                # syntax + dependency-free unit/source checks
-npm test                     # all Node tests; Neon test skipped without a test URL
-npm run test:api             # actual HTTP requests against Express and a fake SQL adapter
-npm run test:coverage        # coverage for actually executed tests
-npm run test:ui              # needs Python Playwright + local Chromium
-```
-
-For an end-to-end test against an **isolated/disposable Neon branch**:
+## Kiểm thử
 
 ```bash
-TEST_DATABASE_URL='postgresql://...' npm run test:integration
+npm run check      # Kiểm tra cấu trúc, cú pháp và unit tests
+npm test           # Source, unit, kiểm thử phiếu phòng và API contract (nếu đã npm install)
+npm run test:ui    # Browser smoke: Chromium / Playwright
+npm run test:api   # HTTP API contract nếu đã cài node_modules
+npm run test:ui:interactive # Luồng checklist / phiếu kiểm tra với API mock
 ```
 
-Use PowerShell `$env:TEST_DATABASE_URL="..."` on Windows. The integration suite creates persistent test accounts and room records. Delete the disposable branch when finished. See [`tests/README.md`](tests/README.md) for a clear separation between unit, mocked HTTP, real database, and browser tests.
+Để test PostgreSQL thật, tạo **nhánh Neon riêng chỉ dùng cho kiểm thử**, đặt `TEST_DATABASE_URL`, sau đó chạy `npm run test:integration`. Không trỏ test vào production.
 
-**What has been checked here:** JavaScript syntax; 12 unit test groups; 6 source/structure groups; 11 staff + 8 student browser views using synthetic responses and mobile widths. **What has not been checked here:** installed-dependency HTTP tests, real Neon transactions, Vercel deployment, or a live user journey. Package installation was unavailable in the execution environment because the npm registry was unreachable. Do not claim those tests passed.
+Bộ test kiểm tra phiếu phòng gồm quyền sinh viên/nhân viên, trạng thái hợp lệ, kiểm soát room_id phía server, và trường hợp sinh viên chưa có phòng. Browser smoke chạy với API giả lập nên không chứng minh kết nối Neon thật. Cần triển khai để tự kiểm tra luồng đầy đủ qua API và database.
 
-## Deploy as one Vercel project
+## Thành phần chính
 
-1. Push the extracted folder to a Git repository (without `.env.local`).
-2. Import the repository into one Vercel project, pointing its root to this folder.
-3. Set Vercel environment variables `DATABASE_URL`, `ADMIN_EMAIL`, `ADMIN_PASSWORD` and optional `ADMIN_NAME` / `SEED_SAMPLE_ROOMS`.
-4. Deploy, open `/api/ready` and confirm Neon is ready, then sign in to the UI.
-5. Test on a Neon branch before connecting a database containing important records.
+| File | Chức năng |
+|---|---|
+| `backend/db/index.js` | Schema Neon, an toàn khi nâng cấp, thêm bảng `room_inspections` |
+| `backend/routes/room-inspections.js` | API ghi/tra cứu phiếu kiểm tra phòng, phân quyền theo người dùng |
+| `backend/lib/context.js` | Audit và thông báo trong ứng dụng, không gửi email |
+| `backend/routes/requests.js` | Dịch vụ Một cửa, nhắn tin, đánh giá |
+| `public/app.js` | SPA sinh viên/nhân viên, checklist, biểu mẫu, in phiếu |
+| `public/khu-a.css` | Giao diện Khu A responsive và bố cục in |
+| `docs/KTX_A_REFERENCE_AND_IMPLEMENTATION.md` | Phạm vi tham khảo nghiệp vụ, kiến trúc và giới hạn |
 
-The root `server.js` default-exports the Express app and Vercel can detect it without a separate frontend/backend deployment. Database tables are created by `npm run db:setup` (or on the first database-backed request). Prefer explicit database migration management for any later production expansion.
+## Nâng cấp từ V5 / V6 / V7
 
-## Release and security limitations
+Áp dụng các file V8 vào mã nguồn cũ rồi triển khai trên cùng Neon. Nếu đang dùng V5, bản vá đã bao gồm các thay đổi backend của V7 cần cho kiểm tra phòng và dịch vụ Một cửa. `CREATE TABLE IF NOT EXISTS room_inspections` tự thêm bảng mới trong lúc khởi tạo API. **V8 không xóa dữ liệu lịch sử**: nếu database từng dùng V6, bảng `email_outbox` và các cột cấu hình email có thể còn trên Neon nhưng không được ứng dụng V7 đọc, ghi hoặc gửi thư. Không tự động `DROP TABLE` vì có thể làm mất dữ liệu cũ; muốn dọn dữ liệu, hãy sao lưu và tự kiểm tra trên nhánh riêng.
 
-This is a course-project implementation, not a university-certified service. Before using real student information, add verified university identity/SSO, staff account lifecycle procedures, persistent rate limiting, monitored migration jobs, backup/recovery tests, retention policies, accessibility checks, and independent security review. The audit log is best-effort, not an immutable ledger.
+## Nâng cấp giao diện và trực quan hóa V8
 
-## CO3011 assessment evidence
+- **Dashboard quản trị:** vòng tròn công suất giường, tiến độ xử lý Một cửa, biểu đồ 7 ngày cho hồ sơ và yêu cầu.
+- **Thống kê:** hai vòng tròn KPI, 7 ngày gần nhất, phân bố nhóm dịch vụ, đánh giá chất lượng; đều lấy từ dữ liệu API đã tải và **không phải biểu đồ dự báo**.
+- **Sơ đồ phòng theo tòa/tầng:** lưới phòng còn giường / đã đầy / tạm dừng, có thể nhấp để lọc bảng phòng. Đây là sơ đồ trạng thái dữ liệu, **không phải bản vẽ kiến trúc tòa nhà**.
+- **Sinh viên:** biểu đồ tiến độ checklist và hành trình nhận phòng, liên kết đến kiểm tra hiện trạng và yêu cầu dịch vụ.
+- Thanh `<progress>` dùng giá trị dữ liệu thật thay vì `style=...` nội tuyến, tương thích với CSP `style-src 'self'`; bổ sung khả năng bỏ qua menu bằng bàn phím, favicon riêng và sửa nội dung trang để mã hóa dữ liệu người dùng.
+- Không dùng thư viện vẽ đồ thị, email, cron, dịch vụ bên ngoài hoặc dữ liệu phải cập nhật định kỳ.
 
-The assignment requires genuine client consultation, project baseline V1.0, revised baseline when approved, PBS/PFD, estimates, risks, resources, weekly actuals, change decisions, verification evidence and individual contributions. The code and draft traceability files are useful starting points; they are **not substitutes for actual project-management evidence**. Disclose AI-assisted development in the final report as required by the assignment.
+Chạy `npm run test:ui` để sinh ảnh minh họa màn hình V8 dưới tên `preview_v8_*`. Đây là kiểm thử trình duyệt **với API giả lập**, không thay thế kiểm thử thực tế bằng Neon.
+
+### Kiểm tra trước khi đưa lên production
+
+- Khởi tạo hoặc cập nhật schema bằng `npm run db:setup` trên **nhánh Neon thử nghiệm** trước; sao lưu cơ sở dữ liệu thật trước khi triển khai.
+- Cấu hình biến môi trường riêng trong Vercel, đặt mật khẩu admin đủ mạnh, tắt `SEED_SAMPLE_ROOMS` ở production; không commit `.env.local`.
+- Chạy đầy đủ `npm test`, `npm run test:api` sau khi `npm install`, và test tích hợp bằng `TEST_DATABASE_URL` trên branch riêng.
+- Kiểm tra lại phân quyền, tải dữ liệu, nhập liệu, in phiếu, export CSV, xử lý lỗi và responsive trên domain Vercel thực tế.
+- Rà soát quyền truy cập, chính sách bảo vệ dữ liệu sinh viên, sao lưu, giám sát và vận hành trước khi dùng với người dùng thật. **Không coi demo đã kiểm thử giả lập là hệ thống production được nghiệm thu.**
+
+### Giới hạn
+
+Phiếu kiểm tra là bản tự khai, không phải biên bản bàn giao hợp pháp; checklist chỉ lưu cục bộ, không phải một nhiệm vụ được cán bộ phê duyệt. Không có cổng thanh toán, dữ liệu cá nhân nhạy cảm hoặc tích hợp hệ thống KTX thật. Bản đồ án cần kiểm thử bảo mật, chính sách lưu trữ, sao lưu và nghiệm thu trước khi vận hành dữ liệu sinh viên thật.

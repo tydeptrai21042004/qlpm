@@ -4,7 +4,7 @@ This project has four deliberately distinct test layers. They must not be confus
 
 | Test | Command | Runs without Neon? | What is actually exercised |
 |---|---|---|---|
-| Pure validation/unit | `npm run test:unit` | Yes, and no `npm install` needed | IDs, text, room rules, announcements, ticket resolution rules, housing-change requests, cookies, password verification |
+| Pure validation/unit and room inspection | `npm run test:unit` | Yes, and no `npm install` needed | IDs, text, room rules, announcements, ticket resolution rules, housing-change requests, cookies, password verification |
 | Source/structure | `npm run test:source` | Yes, no `npm install` needed | Files, endpoint registration, SQL constraint patterns, frontend integration patterns (not functionality) |
 | HTTP API contract | `npm run test:api` | Yes, after `npm install` | **Actual Express request handlers** exercised with a deterministic in-memory SQL adapter; permission checks, statuses, errors, login, staff/student actions |
 | Neon transactional integration | `npm run test:integration` | **No**: requires a disposable Neon branch | Real database: applications, allocation, capacity, transfers, checkout, messages, announcements, notifications, access control, concurrent final-bed approvals |
@@ -34,6 +34,8 @@ npm run test:integration
 ```
 
 The database test creates staff, students, rooms, notices, requests and allocations. All of this data persists; **delete the disposable branch after the run**.
+
+The room inspection tests check student permissions, invalid states, client room-id spoofing, server-side allocation lookup, and record visibility.
 
 ## What tests cannot prove
 

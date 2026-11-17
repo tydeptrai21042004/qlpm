@@ -22,6 +22,8 @@ export function createRequestContext({ query }) {
       VALUES($1,$2,$3,$4,$5)`, [actor, action, entity, entityId, summary]);
   }
   function notify(studentId, title, body, targetType, targetId) {
+    // Notifications are stored exclusively in the application database.
+    // No external mail service, queue or background job is required.
     return sideEffect(`INSERT INTO notifications(user_id,title,body,target_type,target_id)
       VALUES($1,$2,$3,$4,$5)`, [studentId,title,body,targetType,targetId]);
   }
